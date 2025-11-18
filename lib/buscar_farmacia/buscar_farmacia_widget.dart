@@ -689,7 +689,7 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                               crossAxisCount: 2,
                               crossAxisSpacing: 10.0,
                               mainAxisSpacing: 10.0,
-                              childAspectRatio: 0.72,
+                              mainAxisExtent: 290.0,
                             ),
                             itemCount: products.length,
                             itemBuilder: (context, index) {
@@ -962,7 +962,7 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                                         ),
                                       ),
                                     ],
-
+                                    const Spacer(),
                                     // ===== Botón Agregar (persistencia a carts/{uid}/items) =====
                                     Padding(
                                       padding:

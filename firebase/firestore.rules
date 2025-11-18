@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // USERS 
+    match /users/{userId} {
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow read:   if request.auth != null && request.auth.uid == userId;
+      allow write:  if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ====== CARRITO ======
+    // Documento de carrito: /carts/{userId}
+    match /carts/{userId} {
+      // Puedes ajustar esto según si realmente guardas algo en este doc
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow read:   if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+
+      // Items del carrito: /carts/{userId}/items/{itemId}
+      match /items/{itemId} {
+        allow create: if request.auth != null && request.auth.uid == userId;
+        allow read:   if request.auth != null && request.auth.uid == userId;
+        allow update: if request.auth != null && request.auth.uid == userId;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    match /farmacias/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    match /products/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    match /sucursales/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    match /products/{parent}/skus/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    match /{path=**}/skus/{document} {
+      allow read: if true;
+    }
+
+    match /products/{parent}/stock/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    match /{path=**}/stock/{document} {
+      allow read: if true;
+    }
+
+    // Si quieres, puedes borrar este bloque porque ya cubrimos /carts/... arriba:
+    // match /carts/{document} { ... }
+    // match /carts/{parent}/items/{document} { ... }
+    // match /{path=**}/items/{document} { allow read: if true; }
+  }
+}

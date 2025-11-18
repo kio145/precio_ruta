@@ -29,18 +29,27 @@ class RouteViewStatic extends StatefulWidget {
     required this.webGoogleMapsApiKey,
     this.startAddress,
     this.destinationAddress,
+    this.travelMode = 'driving',      // 'walking' | 'driving'
+    this.onDestinationTap,            // callback al tocar el punto rojo
   }) : super(key: key);
 
   final double? height;
   final double? width;
-  final LatLng startCoordinate;      // FF LatLng
-  final LatLng endCoordinate;        // FF LatLng
+  final LatLng startCoordinate; // FF LatLng
+  final LatLng endCoordinate;   // FF LatLng
   final Color lineColor;
   final String iOSGoogleMapsApiKey;
   final String androidGoogleMapsApiKey;
   final String webGoogleMapsApiKey;
   final String? startAddress;
   final String? destinationAddress;
+
+  /// Modo de viaje para Directions/DistanceMatrix
+  /// valores válidos: 'driving', 'walking', 'bicycling', 'transit'
+  final String travelMode;
+
+  /// Se ejecuta cuando el usuario toca el marcador de destino
+  final VoidCallback? onDestinationTap;
 
   @override
   _RouteViewStaticState createState() => _RouteViewStaticState();
@@ -52,7 +61,6 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
 
   String? _placeDistance;
   final Set<Marker> _markers = {};
-
   final Map<PolylineId, Polyline> _polylines = {};
   final List<latlng.LatLng> _polylineCoordinates = [];
 
@@ -66,7 +74,6 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       case TargetPlatform.macOS:
       case TargetPlatform.windows:
       case TargetPlatform.linux:
-        // En desktop normalmente usas la key web si inyectas el script; aquí devolvemos web.
         return widget.webGoogleMapsApiKey;
       default:
         return widget.webGoogleMapsApiKey;
@@ -81,6 +88,19 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       widget.startCoordinate.longitude,
     );
     _initialLocation = CameraPosition(target: startCoordinate, zoom: 14);
+  }
+
+  @override
+  void didUpdateWidget(covariant RouteViewStatic oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Si cambia el origen, destino o modo de viaje, recalculamos la ruta
+    if (oldWidget.startCoordinate != widget.startCoordinate ||
+        oldWidget.endCoordinate != widget.endCoordinate ||
+        oldWidget.travelMode != widget.travelMode) {
+      if (mapController != null) {
+        _calculateAndDrawRoute();
+      }
+    }
   }
 
   @override
@@ -106,32 +126,26 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     final double destLat = widget.endCoordinate.latitude;
     final double destLng = widget.endCoordinate.longitude;
 
-    // Markers
-    final startId = '($startLat, $startLng)';
+    // ---- SOLO MARCADOR DE DESTINO (el origen NO se dibuja) ----
     final destId = '($destLat, $destLng)';
 
-    _markers.add(
-      Marker(
-        markerId: MarkerId(startId),
-        position: latlng.LatLng(startLat, startLng),
-        infoWindow: InfoWindow(
-          title: 'Start $startId',
-          snippet: widget.startAddress ?? '',
-        ),
-      ),
-    );
     _markers.add(
       Marker(
         markerId: MarkerId(destId),
         position: latlng.LatLng(destLat, destLng),
         infoWindow: InfoWindow(
-          title: 'Destination $destId',
+          title: 'Destino',
           snippet: widget.destinationAddress ?? '',
         ),
+        onTap: () {
+          if (widget.onDestinationTap != null) {
+            widget.onDestinationTap!();
+          }
+        },
       ),
     );
 
-    // Ajustar cámara para ver ambos puntos
+    // Ajustar cámara para ver ambos puntos (origen + destino)
     final southWest = latlng.LatLng(
       (startLat <= destLat) ? startLat : destLat,
       (startLng <= destLng) ? startLng : destLng,
@@ -147,11 +161,16 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       ),
     );
 
-    // 1) Directions API para polyline
-    final routeOk =
-        await _fetchDirectionsAndBuildPolyline(startLat, startLng, destLat, destLng);
+    // 1) Directions API para polyline (usando el travelMode recibido)
+    final routeOk = await _fetchDirectionsAndBuildPolyline(
+      startLat,
+      startLng,
+      destLat,
+      destLng,
+      widget.travelMode,
+    );
 
-    // 2) Distancia "sobre la ruta" (suma de segmentos del polyline) + Distance Matrix para duración
+    // 2) Distancia total en km + Distance Matrix para duración
     if (routeOk && _polylineCoordinates.length >= 2) {
       double totalKm = 0.0;
       for (int i = 0; i < _polylineCoordinates.length - 1; i++) {
@@ -165,8 +184,14 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       _placeDistance = totalKm.toStringAsFixed(2);
       FFAppState().routeDistance = '$_placeDistance km';
 
-      // Distance Matrix para duración
-      await _updateDurationWithDistanceMatrix(startLat, startLng, destLat, destLng);
+      // Distance Matrix para estimar la duración
+      await _updateDurationWithDistanceMatrix(
+        startLat,
+        startLng,
+        destLat,
+        destLng,
+        widget.travelMode,
+      );
     }
 
     setState(() {});
@@ -178,12 +203,13 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     double startLng,
     double destLat,
     double destLng,
+    String mode,
   ) async {
     final url = Uri.parse(
       'https://maps.googleapis.com/maps/api/directions/json'
       '?origin=$startLat,$startLng'
       '&destination=$destLat,$destLng'
-      '&mode=driving'
+      '&mode=$mode'
       '&key=$_googleMapsApiKey',
     );
 
@@ -207,7 +233,6 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       return false;
     }
 
-    // Decodificar polyline
     final decoded = _decodePolyline(polyStr);
     if (decoded.isEmpty) {
       debugPrint('MAP::Polyline decodificado vacío');
@@ -234,12 +259,13 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     double startLng,
     double destLat,
     double destLng,
+    String mode,
   ) async {
     final url = Uri.parse(
       'https://maps.googleapis.com/maps/api/distancematrix/json'
       '?origins=$startLat,$startLng'
       '&destinations=$destLat,$destLng'
-      '&mode=driving'
+      '&mode=$mode'
       '&key=$_googleMapsApiKey',
     );
     final resp = await http.get(url);
@@ -255,7 +281,8 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       final durationText =
           (elements.first['duration']?['text'] as String?) ?? '';
       if (durationText.isNotEmpty) {
-        FFAppState().routeDuration = durationText; // e.g. "12 min"
+        // Ej: "12 min"
+        FFAppState().routeDuration = durationText;
       }
     } catch (e) {
       debugPrint('MAP::DistanceMatrix parse error: $e');
@@ -312,7 +339,7 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
         markers: _markers,
         polylines: Set<Polyline>.of(_polylines.values),
         initialCameraPosition: _initialLocation,
-        myLocationEnabled: true,
+        myLocationEnabled: true,           // muestra el puntito azul de origen
         myLocationButtonEnabled: false,
         mapType: MapType.normal,
         zoomGesturesEnabled: true,

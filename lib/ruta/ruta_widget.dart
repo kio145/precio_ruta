@@ -1,3 +1,4 @@
+import '/auth/firebase_auth/auth_util.dart'; // <-- para currentUserUid
 import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -9,9 +10,9 @@ import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart'; // Para abrir Google Maps
 import 'ruta_model.dart';
 export 'ruta_model.dart';
+import '/components/info_farmacia_widget.dart';
 
 class RutaWidget extends StatefulWidget {
   const RutaWidget({super.key});
@@ -31,6 +32,8 @@ class _RutaWidgetState extends State<RutaWidget> {
 
   // Sucursal seleccionada para trazar la ruta
   SucursalesRecord? _selectedSucursal;
+  // Modo de viaje actual (para RouteViewStatic)
+  String _travelMode = 'driving'; // 'walking' | 'driving'
 
   @override
   void initState() {
@@ -66,34 +69,11 @@ class _RutaWidgetState extends State<RutaWidget> {
     return earthRadius * c;
   }
 
-  // Abrir ruta en Google Maps con el modo indicado
-  Future<void> _openGoogleMapsRoute({
-    required LatLng origin,
-    required LatLng destination,
-    required String travelMode, // walking / driving / bicycling / transit
-  }) async {
-    final uri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1'
-      '&origin=${origin.latitude},${origin.longitude}'
-      '&destination=${destination.latitude},${destination.longitude}'
-      '&travelmode=$travelMode',
-    );
-
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se pudo abrir Google Maps.'),
-          ),
-        );
-      }
-    }
-  }
-
   // Modal con la lista de sucursales cercanas
   Widget _buildSucursalesSheet(
     List<SucursalesRecord> sucursales,
     LatLng origin,
+    void Function(SucursalesRecord suc, String mode) onModeSelected,
   ) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -106,7 +86,6 @@ class _RutaWidgetState extends State<RutaWidget> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // barrita de agarre
             Container(
               width: 40,
               height: 4,
@@ -143,12 +122,8 @@ class _RutaWidgetState extends State<RutaWidget> {
                   itemCount: sucursales.length,
                   itemBuilder: (context, index) {
                     final s = sucursales[index];
-                    if (s.ubicacion == null) {
-                      return const SizedBox.shrink();
-                    }
+                    if (s.ubicacion == null) return const SizedBox.shrink();
                     final dist = _distanceInKm(origin, s.ubicacion!);
-
-                    // TODO: ajusta estos campos según tu SucursalesRecord
                     final nombre = s.nombre.isNotEmpty ? s.nombre : 'Sucursal';
 
                     return Card(
@@ -172,12 +147,6 @@ class _RutaWidgetState extends State<RutaWidget> {
                                   ),
                             ),
                             const SizedBox(height: 2),
-                            // Ya no mostramos dirección porque no existe ese campo todavía
-                            // Text(
-                            //   direccion,
-                            //   style: FlutterFlowTheme.of(context).bodySmall,
-                            // ),
-                            const SizedBox(height: 2),
                             Text(
                               'Distancia: ${dist.toStringAsFixed(2)} km',
                               style: FlutterFlowTheme.of(context)
@@ -197,22 +166,15 @@ class _RutaWidgetState extends State<RutaWidget> {
                               children: [
                                 Expanded(
                                   child: FFButtonWidget(
-                                    onPressed: () async {
-                                      setState(() {
-                                        _selectedSucursal = s;
-                                      });
+                                    onPressed: () {
+                                      onModeSelected(s, 'walking');
                                       Navigator.of(context).pop();
-                                      await _openGoogleMapsRoute(
-                                        origin: origin,
-                                        destination: s.ubicacion!,
-                                        travelMode: 'walking',
-                                      );
                                     },
                                     text: 'A pie',
                                     options: FFButtonOptions(
                                       height: 36,
-                                      padding:
-                                          const EdgeInsets.symmetric(horizontal: 12),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12),
                                       color: const Color(0xFF4CAF50),
                                       textStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
@@ -233,23 +195,15 @@ class _RutaWidgetState extends State<RutaWidget> {
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: FFButtonWidget(
-                                    onPressed: () async {
-                                      setState(() {
-                                        _selectedSucursal = s;
-                                      });
+                                    onPressed: () {
+                                      onModeSelected(s, 'driving'); // moto
                                       Navigator.of(context).pop();
-                                      // Moto -> usamos driving para Google Maps
-                                      await _openGoogleMapsRoute(
-                                        origin: origin,
-                                        destination: s.ubicacion!,
-                                        travelMode: 'driving',
-                                      );
                                     },
                                     text: 'Moto',
                                     options: FFButtonOptions(
                                       height: 36,
-                                      padding:
-                                          const EdgeInsets.symmetric(horizontal: 12),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12),
                                       color: const Color(0xFF009FE3),
                                       textStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
@@ -270,23 +224,17 @@ class _RutaWidgetState extends State<RutaWidget> {
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: FFButtonWidget(
-                                    onPressed: () async {
-                                      setState(() {
-                                        _selectedSucursal = s;
-                                      });
+                                    onPressed: () {
+                                      onModeSelected(s, 'driving'); // auto
                                       Navigator.of(context).pop();
-                                      await _openGoogleMapsRoute(
-                                        origin: origin,
-                                        destination: s.ubicacion!,
-                                        travelMode: 'driving',
-                                      );
                                     },
                                     text: 'Auto',
                                     options: FFButtonOptions(
                                       height: 36,
-                                      padding:
-                                          const EdgeInsets.symmetric(horizontal: 12),
-                                      color: FlutterFlowTheme.of(context).primaryText,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12),
+                                      color:
+                                          FlutterFlowTheme.of(context).primaryText,
                                       textStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
                                           .override(
@@ -376,10 +324,7 @@ class _RutaWidgetState extends State<RutaWidget> {
         const maxRadioKm = 1.5;
 
         // 🔹 (Opcional) filtrar por farmacias del carrito
-        // Supongamos que tienes en FFAppState una lista de IDs de farmacia:
-        // final cartPharmacyIds = FFAppState().cartPharmacyIds; // TODO: ajusta si ya lo tienes
-        //
-        // y en SucursalesRecord un campo farmaciaId:
+        // final cartPharmacyIds = FFAppState().cartPharmacyIds;
         // List<SucursalesRecord> filtradasPorCarrito = allSucursales.where((s) {
         //   return cartPharmacyIds.contains(s.farmaciaId);
         // }).toList();
@@ -432,13 +377,36 @@ class _RutaWidgetState extends State<RutaWidget> {
                       startAddress: 'inicio',
                       destinationAddress: 'fin',
                       iOSGoogleMapsApiKey:
-                          'AIzaSyBWlWGnu6osur9X2_ncDGe5ANsYnpUZJdA',
+                          'TU_API_KEY_IOS', // <--- pon aquí tus keys
                       androidGoogleMapsApiKey:
-                          'AIzaSyBbie_NfyxJ-nqAYA6IJI7GhdtUAPTyeyc',
+                          'TU_API_KEY_ANDROID', // <---
                       webGoogleMapsApiKey:
-                          'AIzaSyBbie_NfyxJ-nqAYA6IJI7GhdtUAPTyeyc',
+                          'TU_API_KEY_WEB', // <---
                       startCoordinate: currentLoc,
                       endCoordinate: rutaSucursalesRecord.ubicacion!,
+                      travelMode: _travelMode, // NUEVO
+                      onDestinationTap: () async {
+                        // Sacar productos de esa sucursal desde el carrito
+                        final items = await queryItemsRecordOnce(
+                          parent: FirebaseFirestore.instance
+                              .collection('carts')
+                              .doc(currentUserUid),
+                          queryBuilder: (q) => q.where(
+                            'sucursalRef',
+                            isEqualTo: rutaSucursalesRecord.reference,
+                          ),
+                        );
+
+                        await showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => InfoFarmaciaWidget(
+                            sucursal: rutaSucursalesRecord,
+                            items: items,
+                          ),
+                        );
+                      },
                     ),
                   ),
 
@@ -506,6 +474,12 @@ class _RutaWidgetState extends State<RutaWidget> {
                               return _buildSucursalesSheet(
                                 sucursalesCercanas,
                                 currentLoc,
+                                (sucursal, mode) {
+                                  setState(() {
+                                    _selectedSucursal = sucursal;
+                                    _travelMode = mode;
+                                  });
+                                },
                               );
                             },
                           );
@@ -513,7 +487,8 @@ class _RutaWidgetState extends State<RutaWidget> {
                         text: 'Sucursales',
                         options: FFButtonOptions(
                           height: 40.0,
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 16.0),
                           color: const Color(0xFF1DB954),
                           textStyle: FlutterFlowTheme.of(context)
                               .titleSmall
@@ -533,7 +508,7 @@ class _RutaWidgetState extends State<RutaWidget> {
                     ),
                   ),
 
-                  // Barra inferior con texto y duración (siempre como lo tenías)
+                  // Barra inferior con texto y duración
                   Align(
                     alignment: const AlignmentDirectional(0.0, 1.0),
                     child: Container(

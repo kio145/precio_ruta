@@ -11,6 +11,7 @@ import 'schema/products_record.dart';
 import 'schema/sucursales_record.dart';
 import 'schema/skus_record.dart';
 import 'schema/stock_record.dart';
+import 'schema/items_record.dart'; // <-- NUEVO
 
 export 'dart:async' show StreamSubscription;
 export 'package:cloud_firestore/cloud_firestore.dart' hide Order;
@@ -25,6 +26,7 @@ export 'schema/products_record.dart';
 export 'schema/sucursales_record.dart';
 export 'schema/skus_record.dart';
 export 'schema/stock_record.dart';
+export 'schema/items_record.dart'; // <-- NUEVO
 
 /// Functions to query UsersRecords (as a Stream and as a Future).
 Future<int> queryUsersRecordCount({
@@ -249,6 +251,46 @@ Future<List<StockRecord>> queryStockRecordOnce({
     queryCollectionOnce(
       StockRecord.collection(parent),
       StockRecord.fromSnapshot,
+      queryBuilder: queryBuilder,
+      limit: limit,
+      singleRecord: singleRecord,
+    );
+
+/// Functions to query ItemsRecords (as a Stream and as a Future).  // <-- NUEVO BLOQUE
+Future<int> queryItemsRecordCount({
+  DocumentReference? parent,
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+}) =>
+    queryCollectionCount(
+      ItemsRecord.collection(parent),
+      queryBuilder: queryBuilder,
+      limit: limit,
+    );
+
+Stream<List<ItemsRecord>> queryItemsRecord({
+  DocumentReference? parent,
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+  bool singleRecord = false,
+}) =>
+    queryCollection(
+      ItemsRecord.collection(parent),
+      ItemsRecord.fromSnapshot,
+      queryBuilder: queryBuilder,
+      limit: limit,
+      singleRecord: singleRecord,
+    );
+
+Future<List<ItemsRecord>> queryItemsRecordOnce({
+  DocumentReference? parent,
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+  bool singleRecord = false,
+}) =>
+    queryCollectionOnce(
+      ItemsRecord.collection(parent),
+      ItemsRecord.fromSnapshot,
       queryBuilder: queryBuilder,
       limit: limit,
       singleRecord: singleRecord,

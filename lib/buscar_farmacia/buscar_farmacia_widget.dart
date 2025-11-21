@@ -24,6 +24,7 @@ import '/services/cart_fs.dart';
 
 import 'buscar_farmacia_model.dart';
 export 'buscar_farmacia_model.dart';
+
 // cart_fs.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/schema/items_record.dart';
@@ -38,9 +39,7 @@ class CartFS {
   // Ver carrito
   static Stream<List<ItemsRecord>> watchItems(String uid) {
     return _col(uid).snapshots().map(
-          (s) => s.docs
-              .map((d) => ItemsRecord.fromSnapshot(d))
-              .toList(),
+          (s) => s.docs.map((d) => ItemsRecord.fromSnapshot(d)).toList(),
         );
   }
 
@@ -183,7 +182,33 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
   void _decQty(ProductsRecord p) {
     final v = _getQty(p);
     setState(() => _qtyByProductId[p.reference.id] = (v - 1).clamp(1, 999));
+     }
+
+    /// Devuelve una sucursal para la farmacia seleccionada
+  /// (ajusta el where al nombre real del campo en tu colección).
+  Future<DocumentReference?> _resolverSucursalParaCarrito(
+      DocumentReference? farmaciaRef) async {
+    if (farmaciaRef == null) return null;
+
+    // OJO: cambia 'farmaciaRef' por el nombre REAL del campo en Sucursales
+    final sucursales = await querySucursalesRecordOnce(
+      queryBuilder: (q) => q.where(
+        'farmaciaRef',
+        isEqualTo: farmaciaRef,
+      ),
+      singleRecord: true,
+    );
+
+    if (sucursales.isEmpty) {
+      debugPrint('Cart:: no hay sucursales para farmacia ${farmaciaRef.path}');
+      return null;
+    }
+
+    // Si más adelante guardas distancia en Firestore, aquí podrías elegir la más cercana.
+    final sucursal = sucursales.first;
+    return sucursal.reference;
   }
+
 
   /// =============== Carrito (estado local usado ANTES de persistir) =================
   void _addOrIncrementCartItem({
@@ -284,7 +309,7 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
   String _brandLogo(String slug) =>
       (_BRAND[slug]?['logo_fallback'] as String?) ??
       (_BRAND[slug]?['logo'] as String? ?? '');
-
+      
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<ProductsRecord>>(
@@ -336,8 +361,8 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                 backgroundColor: const Color(0xFF222222),
                 automaticallyImplyLeading: false,
                 leading: Padding(
-                  padding:
-                      const EdgeInsetsDirectional.fromSTEB(11.0, 0.0, 0.0, 0.0),
+                  padding: const EdgeInsetsDirectional.fromSTEB(
+                      11.0, 0.0, 0.0, 0.0),
                   child: FlutterFlowIconButton(
                     borderColor: Colors.transparent,
                     borderRadius: 30.0,
@@ -354,8 +379,8 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                   ),
                 ),
                 title: Padding(
-                  padding:
-                      const EdgeInsetsDirectional.fromSTEB(11.0, 0.0, 0.0, 0.0),
+                  padding: const EdgeInsetsDirectional.fromSTEB(
+                      11.0, 0.0, 0.0, 0.0),
                   child: Text(
                     'BUSCAR PRODUCTO',
                     style: FlutterFlowTheme.of(context).headlineMedium.override(
@@ -708,8 +733,8 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                                       offset: Offset(1.0, 2.0),
                                     )
                                   ],
-                                  borderRadius: const BorderRadius.all(
-                                      Radius.circular(7)),
+                                  borderRadius:
+                                      const BorderRadius.all(Radius.circular(7)),
                                   border: Border.all(
                                       color: const Color(0xFFD6D6D6)),
                                 ),
@@ -963,6 +988,7 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                                       ),
                                     ],
                                     const Spacer(),
+
                                     // ===== Botón Agregar (persistencia a carts/{uid}/items) =====
                                     Padding(
                                       padding:
@@ -1005,6 +1031,11 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                                             }
                                           }
 
+                                          // 👉 NUEVO: resolver sucursal real para esa farmacia
+                                          final sucursalRefToUse =
+                                              await _resolverSucursalParaCarrito(
+                                                  _selectedFarmRef);
+
                                           // Metadatos de la farmacia (para agrupar y ver ubicaciones)
                                           final slug = _selectedSlug ?? '';
                                           final label = _brandLabel(slug);
@@ -1015,7 +1046,8 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                                             uid: currentUserUid,
                                             productRef: product.reference,
                                             skuRef: skuRefToUse,
-                                            sucursalRef: _selectedFarmRef, // opcional
+                                            sucursalRef:
+                                            sucursalRefToUse, // 👈 ahora sí es sucursal
                                             name: product.nombre ?? '',
                                             imageUrl: imageUrlToUse,
                                             unitPrice: priceToUse,
@@ -1027,9 +1059,10 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                                             pharmacyLabel: label,
                                             pharmacyLogo: logo,
                                           );
+
                                           // Reinicia el selector a 1
-                                          setState(() =>
-                                              _qtyByProductId[product.reference.id] = 1);
+                                          setState(() => _qtyByProductId[
+                                              product.reference.id] = 1);
 
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
@@ -1037,7 +1070,8 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                                               content: Text(
                                                 'Agregado: ${product.nombre} x$n',
                                               ),
-                                              duration: const Duration(milliseconds: 900),
+                                              duration: const Duration(
+                                                  milliseconds: 900),
                                             ),
                                           );
                                         },
@@ -1045,29 +1079,31 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                                         options: FFButtonOptions(
                                           width: 149.0,
                                           height: 27.0,
-                                          padding: const EdgeInsetsDirectional
-                                              .fromSTEB(16.0, 0.0, 16.0, 0.0),
+                                          padding:
+                                              const EdgeInsetsDirectional
+                                                  .fromSTEB(
+                                                      16.0, 0.0, 16.0, 0.0),
                                           color: const Color(0xFF009FE3),
-                                          textStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .titleSmall
-                                                  .override(
-                                                    font: GoogleFonts.interTight(
-                                                      fontWeight:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .titleSmall
-                                                              .fontWeight,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .titleSmall
-                                                              .fontStyle,
-                                                    ),
-                                                    color: Colors.white,
-                                                    fontSize: 15.0,
-                                                    letterSpacing: 0.0,
-                                                  ),
+                                          textStyle: FlutterFlowTheme.of(
+                                                  context)
+                                              .titleSmall
+                                              .override(
+                                                font: GoogleFonts.interTight(
+                                                  fontWeight:
+                                                      FlutterFlowTheme.of(
+                                                              context)
+                                                          .titleSmall
+                                                          .fontWeight,
+                                                  fontStyle:
+                                                      FlutterFlowTheme.of(
+                                                              context)
+                                                          .titleSmall
+                                                          .fontStyle,
+                                                ),
+                                                color: Colors.white,
+                                                fontSize: 15.0,
+                                                letterSpacing: 0.0,
+                                              ),
                                           elevation: 0.0,
                                           borderRadius:
                                               BorderRadius.circular(8.0),
@@ -1099,8 +1135,8 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                           context.pushNamed(CarritoWidget.routeName);
                         },
                         text: '',
-                        icon:
-                            const Icon(Icons.shopping_cart_rounded, size: 45.0),
+                        icon: const Icon(Icons.shopping_cart_rounded,
+                            size: 45.0),
                         options: FFButtonOptions(
                           padding: const EdgeInsets.all(13.0),
                           iconPadding: const EdgeInsets.all(0.0),

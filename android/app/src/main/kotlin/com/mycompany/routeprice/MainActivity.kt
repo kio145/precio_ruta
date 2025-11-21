@@ -1,4 +1,4 @@
-package com.routeprice.precio_ruta
+package com.mycompany.routeprice
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -377,11 +377,11 @@ class _RutaWidgetState extends State<RutaWidget> {
                       startAddress: 'inicio',
                       destinationAddress: 'fin',
                       iOSGoogleMapsApiKey:
-                          'TU_API_KEY_IOS', // <--- pon aquí tus keys
+                          'AIzaSyCshROPEm_7o7-Vob-rGwrChIJbl0PvX9M', // <--- pon aquí tus keys
                       androidGoogleMapsApiKey:
-                          'TU_API_KEY_ANDROID', // <---
+                          'AIzaSyCshROPEm_7o7-Vob-rGwrChIJbl0PvX9M', // <--- 
                       webGoogleMapsApiKey:
-                          'TU_API_KEY_WEB', // <---
+                          'AIzaSyCshROPEm_7o7-Vob-rGwrChIJbl0PvX9M', // <---
                       startCoordinate: currentLoc,
                       endCoordinate: rutaSucursalesRecord.ubicacion!,
                       travelMode: _travelMode, // NUEVO

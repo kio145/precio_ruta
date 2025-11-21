@@ -14,10 +14,20 @@ class InfoFarmaciaWidget extends StatefulWidget {
     super.key,
     required this.sucursal,
     required this.items,
+
+    /// Callbacks opcionales para pedir ruta
+    this.onWalkPressed,
+    this.onMotoPressed,
+    this.onAutoPressed,
   });
 
   final SucursalesRecord sucursal;
   final List<ItemsRecord> items;
+
+  /// Se ejecutan al pulsar los botones de ruta
+  final Future<void> Function(SucursalesRecord sucursal)? onWalkPressed;
+  final Future<void> Function(SucursalesRecord sucursal)? onMotoPressed;
+  final Future<void> Function(SucursalesRecord sucursal)? onAutoPressed;
 
   @override
   State<InfoFarmaciaWidget> createState() => _InfoFarmaciaWidgetState();
@@ -45,6 +55,17 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
     super.dispose();
   }
 
+  /// Horario fijo: 07:00 - 22:30 (puedes ajustar esto o luego leerlo de Firestore)
+  bool _isOpenNow() {
+    final now = TimeOfDay.fromDateTime(DateTime.now());
+    final minutesNow = now.hour * 60 + now.minute;
+
+    const openMinutes = 7 * 60; // 07:00
+    const closeMinutes = 22 * 60 + 30; // 22:30
+
+    return minutesNow >= openMinutes && minutesNow <= closeMinutes;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Para que escuche cambios en FFAppState (routeDuration, etc.)
@@ -54,6 +75,11 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
     final items = widget.items;
     final nombreSucursal =
         suc.nombre.isNotEmpty ? suc.nombre : 'Sucursal sin nombre';
+
+    final isOpen = _isOpenNow();
+    final statusText = isOpen ? 'Abierto' : 'Cerrado';
+    final statusColor =
+        isOpen ? const Color(0xFF49CA77) : const Color(0xFFFF5B5B);
 
     return Container(
       width: 393.0,
@@ -115,12 +141,12 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                 children: [
                   FFButtonWidget(
                     onPressed: () {},
-                    text: 'Cerrado',
+                    text: statusText,
                     options: FFButtonOptions(
                       height: 40.0,
                       padding: const EdgeInsetsDirectional.fromSTEB(
                           16.0, 0.0, 16.0, 0.0),
-                      color: const Color(0xFFFF5B5B),
+                      color: statusColor,
                       textStyle:
                           FlutterFlowTheme.of(context).titleSmall.override(
                                 font: GoogleFonts.interTight(
@@ -208,127 +234,148 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
               alignment: const AlignmentDirectional(0.0, 0.0),
               child: Padding(
                 padding: const EdgeInsetsDirectional.fromSTEB(
-                    0.0, 10.0, 31.0, 12.0),
+                    0.0, 10.0, 16.0, 12.0),
                 child: Row(
                   mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // A PIE
-                    FFButtonWidget(
-                      onPressed: () {},
-                      text: FFAppState().routeDuration.isNotEmpty
-                          ? FFAppState().routeDuration
-                          : '16 min',
-                      icon: const Icon(
-                        Icons.directions_walk,
-                        size: 22.89,
-                      ),
-                      options: FFButtonOptions(
-                        width: 92.0,
-                        height: 29.0,
-                        padding: const EdgeInsetsDirectional.fromSTEB(
-                            2.0, 0.0, 4.0, 0.0),
-                        iconPadding: const EdgeInsetsDirectional.fromSTEB(
-                            0.0, 0.0, 0.0, 0.0),
-                        iconColor: const Color(0xFF49CA77),
-                        color: FlutterFlowTheme.of(context).secondaryBackground,
-                        textStyle:
-                            FlutterFlowTheme.of(context).titleSmall.override(
-                                  font: GoogleFonts.interTight(
-                                    fontWeight: FontWeight.normal,
-                                    fontStyle: FlutterFlowTheme.of(context)
-                                        .titleSmall
-                                        .fontStyle,
-                                  ),
-                                  color: const Color(0xFF49CA77),
-                                  fontSize: 13.0,
-                                  letterSpacing: 0.0,
-                                ),
-                        elevation: 0.0,
-                        borderSide: const BorderSide(
-                          color: Color(0xFF49CA77),
+                    Expanded(
+                      child: FFButtonWidget(
+                        onPressed: () async {
+                          if (widget.onWalkPressed != null) {
+                            await widget.onWalkPressed!(suc);
+                          }
+                        },
+                        text: FFAppState().routeDuration.isNotEmpty
+                            ? FFAppState().routeDuration
+                            : '16 min',
+                        icon: const Icon(
+                          Icons.directions_walk,
+                          size: 22.89,
                         ),
-                        borderRadius: BorderRadius.circular(4.0),
+                        options: FFButtonOptions(
+                          height: 29.0,
+                          padding: const EdgeInsetsDirectional.fromSTEB(
+                              2.0, 0.0, 4.0, 0.0),
+                          iconPadding: const EdgeInsetsDirectional.fromSTEB(
+                              0.0, 0.0, 0.0, 0.0),
+                          iconColor: const Color(0xFF49CA77),
+                          color: FlutterFlowTheme.of(context)
+                              .secondaryBackground,
+                          textStyle:
+                              FlutterFlowTheme.of(context).titleSmall.override(
+                                    font: GoogleFonts.interTight(
+                                      fontWeight: FontWeight.normal,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .titleSmall
+                                          .fontStyle,
+                                    ),
+                                    color: const Color(0xFF49CA77),
+                                    fontSize: 13.0,
+                                    letterSpacing: 0.0,
+                                  ),
+                          elevation: 0.0,
+                          borderSide: const BorderSide(
+                            color: Color(0xFF49CA77),
+                          ),
+                          borderRadius: BorderRadius.circular(4.0),
+                        ),
                       ),
                     ),
+
+                    const SizedBox(width: 8.0),
 
                     // MOTO
-                    FFButtonWidget(
-                      onPressed: () {},
-                      text: FFAppState().routeDuration.isNotEmpty
-                          ? FFAppState().routeDuration
-                          : '16 min',
-                      icon: const Icon(
-                        Icons.motorcycle,
-                        size: 17.4,
-                      ),
-                      options: FFButtonOptions(
-                        width: 92.0,
-                        height: 29.0,
-                        padding: const EdgeInsetsDirectional.fromSTEB(
-                            2.0, 0.0, 4.0, 0.0),
-                        iconPadding: const EdgeInsetsDirectional.fromSTEB(
-                            0.0, 0.0, 0.0, 0.0),
-                        color: FlutterFlowTheme.of(context).secondaryBackground,
-                        textStyle:
-                            FlutterFlowTheme.of(context).titleSmall.override(
-                                  font: GoogleFonts.interTight(
-                                    fontWeight: FontWeight.normal,
-                                    fontStyle: FlutterFlowTheme.of(context)
-                                        .titleSmall
-                                        .fontStyle,
-                                  ),
-                                  color: const Color(0xFF49CA77),
-                                  fontSize: 13.0,
-                                  letterSpacing: 0.0,
-                                ),
-                        elevation: 0.0,
-                        borderSide: const BorderSide(
-                          color: Color(0xFF49CA77),
+                    Expanded(
+                      child: FFButtonWidget(
+                        onPressed: () async {
+                          if (widget.onMotoPressed != null) {
+                            await widget.onMotoPressed!(suc);
+                          }
+                        },
+                        text: FFAppState().routeDuration.isNotEmpty
+                            ? FFAppState().routeDuration
+                            : '16 min',
+                        icon: const Icon(
+                          Icons.motorcycle,
+                          size: 17.4,
                         ),
-                        borderRadius: BorderRadius.circular(4.0),
+                        options: FFButtonOptions(
+                          height: 29.0,
+                          padding: const EdgeInsetsDirectional.fromSTEB(
+                              2.0, 0.0, 4.0, 0.0),
+                          iconPadding: const EdgeInsetsDirectional.fromSTEB(
+                              0.0, 0.0, 0.0, 0.0),
+                          color: FlutterFlowTheme.of(context)
+                              .secondaryBackground,
+                          textStyle:
+                              FlutterFlowTheme.of(context).titleSmall.override(
+                                    font: GoogleFonts.interTight(
+                                      fontWeight: FontWeight.normal,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .titleSmall
+                                          .fontStyle,
+                                    ),
+                                    color: const Color(0xFF49CA77),
+                                    fontSize: 13.0,
+                                    letterSpacing: 0.0,
+                                  ),
+                          elevation: 0.0,
+                          borderSide: const BorderSide(
+                            color: Color(0xFF49CA77),
+                          ),
+                          borderRadius: BorderRadius.circular(4.0),
+                        ),
                       ),
                     ),
 
+                    const SizedBox(width: 8.0),
+
                     // AUTO
-                    FFButtonWidget(
-                      onPressed: () {},
-                      text: FFAppState().routeDuration.isNotEmpty
-                          ? FFAppState().routeDuration
-                          : '16 min',
-                      icon: const Icon(
-                        Icons.directions_car,
-                        size: 18.99,
-                      ),
-                      options: FFButtonOptions(
-                        width: 92.0,
-                        height: 29.0,
-                        padding: const EdgeInsetsDirectional.fromSTEB(
-                            2.0, 0.0, 4.0, 0.0),
-                        iconPadding: const EdgeInsetsDirectional.fromSTEB(
-                            0.0, 0.0, 0.0, 0.0),
-                        iconColor: const Color(0xFF49CA77),
-                        color: FlutterFlowTheme.of(context).secondaryBackground,
-                        textStyle:
-                            FlutterFlowTheme.of(context).titleSmall.override(
-                                  font: GoogleFonts.interTight(
-                                    fontWeight: FontWeight.normal,
-                                    fontStyle: FlutterFlowTheme.of(context)
-                                        .titleSmall
-                                        .fontStyle,
-                                  ),
-                                  color: const Color(0xFF49CA77),
-                                  fontSize: 13.0,
-                                  letterSpacing: 0.0,
-                                ),
-                        elevation: 0.0,
-                        borderSide: const BorderSide(
-                          color: Color(0xFF49CA77),
+                    Expanded(
+                      child: FFButtonWidget(
+                        onPressed: () async {
+                          if (widget.onAutoPressed != null) {
+                            await widget.onAutoPressed!(suc);
+                          }
+                        },
+                        text: FFAppState().routeDuration.isNotEmpty
+                            ? FFAppState().routeDuration
+                            : '16 min',
+                        icon: const Icon(
+                          Icons.directions_car,
+                          size: 18.99,
                         ),
-                        borderRadius: BorderRadius.circular(4.0),
+                        options: FFButtonOptions(
+                          height: 29.0,
+                          padding: const EdgeInsetsDirectional.fromSTEB(
+                              2.0, 0.0, 4.0, 0.0),
+                          iconPadding: const EdgeInsetsDirectional.fromSTEB(
+                              0.0, 0.0, 0.0, 0.0),
+                          iconColor: const Color(0xFF49CA77),
+                          color: FlutterFlowTheme.of(context)
+                              .secondaryBackground,
+                          textStyle:
+                              FlutterFlowTheme.of(context).titleSmall.override(
+                                    font: GoogleFonts.interTight(
+                                      fontWeight: FontWeight.normal,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .titleSmall
+                                          .fontStyle,
+                                    ),
+                                    color: const Color(0xFF49CA77),
+                                    fontSize: 13.0,
+                                    letterSpacing: 0.0,
+                                  ),
+                          elevation: 0.0,
+                          borderSide: const BorderSide(
+                            color: Color(0xFF49CA77),
+                          ),
+                          borderRadius: BorderRadius.circular(4.0),
+                        ),
                       ),
                     ),
-                  ].divide(const SizedBox(width: 22.0)),
+                  ],
                 ),
               ),
             ),

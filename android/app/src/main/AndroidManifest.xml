@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-package="com.routeprice.precio_ruta">
+package="com.mycompany.routeprice">
     <!-- 🔐 Permisos de ubicación e internet -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -13,7 +13,7 @@ package="com.routeprice.precio_ruta">
         <!-- 🔑 API KEY de Google Maps para Android -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBbie_NfyxJ-nqAYA6IJI7GhdtUAPTyeyc" />
+            android:value="AIzaSyCshROPEm_7o7-Vob-rGwrChIJbl0PvX9M" />
 
         <activity
             android:name=".MainActivity"

@@ -29,14 +29,17 @@ class RouteViewStatic extends StatefulWidget {
     required this.webGoogleMapsApiKey,
     this.startAddress,
     this.destinationAddress,
-    this.travelMode = 'driving',      // 'walking' | 'driving'
-    this.onDestinationTap,            // callback al tocar el punto rojo
+    this.travelMode = 'driving', // 'walking' | 'driving' | ...
+    this.onDestinationTap,
   }) : super(key: key);
 
   final double? height;
   final double? width;
-  final LatLng startCoordinate; // FF LatLng
-  final LatLng endCoordinate;   // FF LatLng
+
+  /// Coordenadas de FlutterFlow (LatLng de FF, NO de google_maps_flutter)
+  final LatLng startCoordinate;
+  final LatLng endCoordinate;
+
   final Color lineColor;
   final String iOSGoogleMapsApiKey;
   final String androidGoogleMapsApiKey;
@@ -64,21 +67,11 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
   final Map<PolylineId, Polyline> _polylines = {};
   final List<latlng.LatLng> _polylineCoordinates = [];
 
-  String get _googleMapsApiKey {
-    if (kIsWeb) return widget.webGoogleMapsApiKey;
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.iOS:
-        return widget.iOSGoogleMapsApiKey;
-      case TargetPlatform.android:
-        return widget.androidGoogleMapsApiKey;
-      case TargetPlatform.macOS:
-      case TargetPlatform.windows:
-      case TargetPlatform.linux:
-        return widget.webGoogleMapsApiKey;
-      default:
-        return widget.webGoogleMapsApiKey;
-    }
-  }
+  /// IMPORTANTE:
+  /// Para las llamadas HTTP (Directions / Distance Matrix) usaremos SIEMPRE
+  /// la API key "web", independientemente de la plataforma.
+  /// El SDK de mapas usa la key que está en el AndroidManifest/iOS plist.
+  String get _directionsApiKey => widget.webGoogleMapsApiKey;
 
   @override
   void initState() {
@@ -125,6 +118,21 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     final double startLng = widget.startCoordinate.longitude;
     final double destLat = widget.endCoordinate.latitude;
     final double destLng = widget.endCoordinate.longitude;
+
+    // Logs para debug
+    debugPrint('MAP::Route ORIGEN = $startLat,$startLng');
+    debugPrint('MAP::Route DESTINO = $destLat,$destLng');
+    debugPrint('MAP::Route travelMode (raw) = ${widget.travelMode}');
+
+    if (_directionsApiKey.isEmpty) {
+      debugPrint('MAP::ERROR -> Directions API KEY vacía');
+      return;
+    } else {
+      final keyPrefix = _directionsApiKey.length > 6
+          ? '${_directionsApiKey.substring(0, 6)}...'
+          : _directionsApiKey;
+      debugPrint('MAP::Usando Directions KEY (prefijo) = $keyPrefix');
+    }
 
     // ---- SOLO MARCADOR DE DESTINO (el origen NO se dibuja) ----
     final destId = '($destLat, $destLng)';
@@ -197,6 +205,17 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     setState(() {});
   }
 
+  // Normaliza el modo de viaje y asegura valores válidos
+  String _normalizeMode(String mode) {
+    var m = (mode.isEmpty ? 'driving' : mode.toLowerCase());
+    const allowed = ['driving', 'walking', 'bicycling', 'transit'];
+    if (!allowed.contains(m)) {
+      debugPrint('MAP::Modo de viaje "$mode" no válido, usando "driving"');
+      m = 'driving';
+    }
+    return m;
+  }
+
   // Pide Directions API y decodifica overview_polyline
   Future<bool> _fetchDirectionsAndBuildPolyline(
     double startLat,
@@ -205,24 +224,38 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     double destLng,
     String mode,
   ) async {
+    final safeMode = _normalizeMode(mode);
+
     final url = Uri.parse(
       'https://maps.googleapis.com/maps/api/directions/json'
       '?origin=$startLat,$startLng'
       '&destination=$destLat,$destLng'
-      '&mode=$mode'
-      '&key=$_googleMapsApiKey',
+      '&mode=$safeMode'
+      '&key=$_directionsApiKey',
     );
+
+    debugPrint('MAP::Directions URL = $url');
 
     final resp = await http.get(url);
     if (resp.statusCode != 200) {
-      debugPrint('MAP::Directions error ${resp.statusCode}');
+      debugPrint('MAP::Directions error HTTP ${resp.statusCode}');
+      debugPrint('MAP::Directions body = ${resp.body}');
       return false;
     }
 
     final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    final status = data['status'] as String? ?? 'NO_STATUS';
+    final errorMessage = data['error_message'] as String? ?? 'sin mensaje';
+
+    debugPrint('MAP::Directions status = $status');
+    if (status != 'OK') {
+      debugPrint('MAP::Directions ERROR -> $errorMessage');
+      return false;
+    }
+
     final routes = (data['routes'] as List?) ?? [];
     if (routes.isEmpty) {
-      debugPrint('MAP::Directions sin rutas');
+      debugPrint('MAP::Directions sin rutas (routes vacío)');
       return false;
     }
 
@@ -261,28 +294,51 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     double destLng,
     String mode,
   ) async {
+    final safeMode = _normalizeMode(mode);
+
     final url = Uri.parse(
       'https://maps.googleapis.com/maps/api/distancematrix/json'
       '?origins=$startLat,$startLng'
       '&destinations=$destLat,$destLng'
-      '&mode=$mode'
-      '&key=$_googleMapsApiKey',
+      '&mode=$safeMode'
+      '&key=$_directionsApiKey',
     );
+
+    debugPrint('MAP::DistanceMatrix URL = $url');
+
     final resp = await http.get(url);
     if (resp.statusCode != 200) {
-      debugPrint('MAP::DistanceMatrix error ${resp.statusCode}');
+      debugPrint('MAP::DistanceMatrix error HTTP ${resp.statusCode}');
+      debugPrint('MAP::DistanceMatrix body = ${resp.body}');
       return;
     }
 
     final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    final status = data['status'] as String? ?? 'NO_STATUS';
+    final errorMessage = data['error_message'] as String? ?? 'sin mensaje';
+    debugPrint('MAP::DistanceMatrix status = $status');
+    if (status != 'OK') {
+      debugPrint('MAP::DistanceMatrix ERROR -> $errorMessage');
+      return;
+    }
+
     try {
       final rows = (data['rows'] as List?) ?? [];
       final elements = (rows.first['elements'] as List?) ?? [];
+      final elem = elements.first as Map<String, dynamic>;
+      final elemStatus = elem['status'] as String? ?? 'NO_STATUS';
+      debugPrint('MAP::DistanceMatrix element status = $elemStatus');
+
+      if (elemStatus != 'OK') {
+        return;
+      }
+
       final durationText =
-          (elements.first['duration']?['text'] as String?) ?? '';
+          (elem['duration']?['text'] as String?) ?? '';
       if (durationText.isNotEmpty) {
         // Ej: "12 min"
         FFAppState().routeDuration = durationText;
+        debugPrint('MAP::Duration = $durationText');
       }
     } catch (e) {
       debugPrint('MAP::DistanceMatrix parse error: $e');
@@ -293,8 +349,7 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
   double _coordinateDistance(double lat1, double lon1, double lat2, double lon2) {
     final p = 0.017453292519943295; // pi/180
     final c = cos;
-    final a = 0.5 -
-        c((lat2 - lat1) * p) / 2 +
+    final a = 0.5 - c((lat2 - lat1) * p) / 2 +
         c(lat1 * p) * c(lat2 * p) * (1 - c((lon2 - lon1) * p)) / 2;
     return 12742 * asin(sqrt(a));
   }
@@ -339,7 +394,7 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
         markers: _markers,
         polylines: Set<Polyline>.of(_polylines.values),
         initialCameraPosition: _initialLocation,
-        myLocationEnabled: true,           // muestra el puntito azul de origen
+        myLocationEnabled: true, // puntito azul
         myLocationButtonEnabled: false,
         mapType: MapType.normal,
         zoomGesturesEnabled: true,

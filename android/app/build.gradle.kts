@@ -1,16 +1,20 @@
 plugins {
     id("com.android.application")
-    id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id("org.jetbrains.kotlin.android")
+    // El plugin de Flutter SIEMPRE va después del de Android/Kotlin
     id("dev.flutter.flutter-gradle-plugin")
+    // Plugin de Firebase / Google Services
+    id("com.google.gms.google-services")
 }
 
 android {
-    namespace = "com.routeprice.precio_ruta"
+    // 👇 Debe coincidir con tu package de Firebase
+    namespace = "com.mycompany.routeprice"
+
     compileSdk = flutter.compileSdkVersion
 
-    // 👇 VOLVEMOS AL NDK QUE TRAE FLUTTER (26.x), NO FORZAMOS EL 27.
-    ndkVersion = flutter.ndkVersion
+    // NDK que te instaló el SDK Manager
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -22,10 +26,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.routeprice.precio_ruta"
+        // 👇 Igual que en Firebase: com.mycompany.routeprice
+        applicationId = "com.mycompany.routeprice"
 
-        // 👇 mantenemos el minSdk en 23 para Firebase
-        minSdk = 23
+        // Flutter ya define el minSdk (para Firebase ≥ 23)
+        minSdk = flutter.minSdkVersion
 
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -34,8 +39,7 @@ android {
 
     buildTypes {
         release {
-            // TODO: añade tu signingConfig propia para publicar en Play Store.
-            // De momento firmamos con la debug key para que `flutter run --release` funcione.
+            // Para pruebas usamos la debug key
             signingConfig = signingConfigs.getByName("debug")
         }
     }

@@ -55,7 +55,7 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
     super.dispose();
   }
 
-  /// Horario fijo: 07:00 - 22:30 (puedes ajustar esto o luego leerlo de Firestore)
+  /// Horario fijo: 07:00 - 22:30
   bool _isOpenNow() {
     final now = TimeOfDay.fromDateTime(DateTime.now());
     final minutesNow = now.hour * 60 + now.minute;
@@ -68,7 +68,6 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // Para que escuche cambios en FFAppState (routeDuration, etc.)
     context.watch<FFAppState>();
 
     final suc = widget.sucursal;
@@ -229,7 +228,7 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
               ),
             ),
 
-            // ===== TIEMPOS A PIE / MOTO / AUTO =====
+            // ===== BOTONES A PIE / MOTO / AUTO =====
             Align(
               alignment: const AlignmentDirectional(0.0, 0.0),
               child: Padding(
@@ -246,39 +245,33 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                             await widget.onWalkPressed!(suc);
                           }
                         },
-                        text: FFAppState().routeDuration.isNotEmpty
-                            ? FFAppState().routeDuration
-                            : '16 min',
+                        text: 'A pie',
                         icon: const Icon(
                           Icons.directions_walk,
-                          size: 22.89,
+                          size: 20,
                         ),
                         options: FFButtonOptions(
-                          height: 29.0,
+                          height: 32.0,
                           padding: const EdgeInsetsDirectional.fromSTEB(
-                              2.0, 0.0, 4.0, 0.0),
+                              4.0, 0.0, 4.0, 0.0),
                           iconPadding: const EdgeInsetsDirectional.fromSTEB(
                               0.0, 0.0, 0.0, 0.0),
-                          iconColor: const Color(0xFF49CA77),
-                          color: FlutterFlowTheme.of(context)
-                              .secondaryBackground,
+                          iconColor: Colors.white,
+                          color: const Color(0xFF49CA77),
                           textStyle:
                               FlutterFlowTheme.of(context).titleSmall.override(
                                     font: GoogleFonts.interTight(
-                                      fontWeight: FontWeight.normal,
+                                      fontWeight: FontWeight.w600,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
                                           .fontStyle,
                                     ),
-                                    color: const Color(0xFF49CA77),
+                                    color: Colors.white,
                                     fontSize: 13.0,
                                     letterSpacing: 0.0,
                                   ),
                           elevation: 0.0,
-                          borderSide: const BorderSide(
-                            color: Color(0xFF49CA77),
-                          ),
-                          borderRadius: BorderRadius.circular(4.0),
+                          borderRadius: BorderRadius.circular(6.0),
                         ),
                       ),
                     ),
@@ -293,38 +286,32 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                             await widget.onMotoPressed!(suc);
                           }
                         },
-                        text: FFAppState().routeDuration.isNotEmpty
-                            ? FFAppState().routeDuration
-                            : '16 min',
+                        text: 'Moto',
                         icon: const Icon(
                           Icons.motorcycle,
-                          size: 17.4,
+                          size: 18,
                         ),
                         options: FFButtonOptions(
-                          height: 29.0,
+                          height: 32.0,
                           padding: const EdgeInsetsDirectional.fromSTEB(
-                              2.0, 0.0, 4.0, 0.0),
+                              4.0, 0.0, 4.0, 0.0),
                           iconPadding: const EdgeInsetsDirectional.fromSTEB(
                               0.0, 0.0, 0.0, 0.0),
-                          color: FlutterFlowTheme.of(context)
-                              .secondaryBackground,
+                          color: const Color(0xFF009FE3),
                           textStyle:
                               FlutterFlowTheme.of(context).titleSmall.override(
                                     font: GoogleFonts.interTight(
-                                      fontWeight: FontWeight.normal,
+                                      fontWeight: FontWeight.w600,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
                                           .fontStyle,
                                     ),
-                                    color: const Color(0xFF49CA77),
+                                    color: Colors.white,
                                     fontSize: 13.0,
                                     letterSpacing: 0.0,
                                   ),
                           elevation: 0.0,
-                          borderSide: const BorderSide(
-                            color: Color(0xFF49CA77),
-                          ),
-                          borderRadius: BorderRadius.circular(4.0),
+                          borderRadius: BorderRadius.circular(6.0),
                         ),
                       ),
                     ),
@@ -339,39 +326,33 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                             await widget.onAutoPressed!(suc);
                           }
                         },
-                        text: FFAppState().routeDuration.isNotEmpty
-                            ? FFAppState().routeDuration
-                            : '16 min',
+                        text: 'Auto',
                         icon: const Icon(
                           Icons.directions_car,
-                          size: 18.99,
+                          size: 18,
                         ),
                         options: FFButtonOptions(
-                          height: 29.0,
+                          height: 32.0,
                           padding: const EdgeInsetsDirectional.fromSTEB(
-                              2.0, 0.0, 4.0, 0.0),
+                              4.0, 0.0, 4.0, 0.0),
                           iconPadding: const EdgeInsetsDirectional.fromSTEB(
                               0.0, 0.0, 0.0, 0.0),
-                          iconColor: const Color(0xFF49CA77),
-                          color: FlutterFlowTheme.of(context)
-                              .secondaryBackground,
+                          iconColor: Colors.white,
+                          color: const Color(0xFF333333),
                           textStyle:
                               FlutterFlowTheme.of(context).titleSmall.override(
                                     font: GoogleFonts.interTight(
-                                      fontWeight: FontWeight.normal,
+                                      fontWeight: FontWeight.w600,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
                                           .fontStyle,
                                     ),
-                                    color: const Color(0xFF49CA77),
+                                    color: Colors.white,
                                     fontSize: 13.0,
                                     letterSpacing: 0.0,
                                   ),
                           elevation: 0.0,
-                          borderSide: const BorderSide(
-                            color: Color(0xFF49CA77),
-                          ),
-                          borderRadius: BorderRadius.circular(4.0),
+                          borderRadius: BorderRadius.circular(6.0),
                         ),
                       ),
                     ),

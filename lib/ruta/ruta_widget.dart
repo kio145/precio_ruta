@@ -288,7 +288,7 @@ class _RutaWidgetState extends State<RutaWidget> {
     }
 
     return StreamBuilder<List<SucursalesRecord>>(
-      stream: querySucursalesRecord(), // <- YA NO singleRecord
+      stream: querySucursalesRecord(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return Scaffold(
@@ -323,16 +323,8 @@ class _RutaWidgetState extends State<RutaWidget> {
         final currentLoc = currentUserLocationValue!;
         const maxRadioKm = 1.5;
 
-        // 🔹 (Opcional) filtrar por farmacias del carrito
-        // final cartPharmacyIds = FFAppState().cartPharmacyIds;
-        // List<SucursalesRecord> filtradasPorCarrito = allSucursales.where((s) {
-        //   return cartPharmacyIds.contains(s.farmaciaId);
-        // }).toList();
-        //
-        // Por ahora usamos todas:
         final baseList = allSucursales;
 
-        // 🔹 Filtrar por radio (1.5 km alrededor de la ubicación actual)
         final sucursalesCercanas = baseList.where((s) {
           final loc = s.ubicacion;
           if (loc == null) return false;
@@ -377,16 +369,15 @@ class _RutaWidgetState extends State<RutaWidget> {
                       startAddress: 'inicio',
                       destinationAddress: 'fin',
                       iOSGoogleMapsApiKey:
-                          'AIzaSyCshROPEm_7o7-Vob-rGwrChIJbl0PvX9M', // <--- pon aquí tus keys
+                          'AIzaSyCshROPEm_7o7-Vob-rGwrChIJbl0PvX9M',
                       androidGoogleMapsApiKey:
-                          'AIzaSyCshROPEm_7o7-Vob-rGwrChIJbl0PvX9M', // <--- 
+                          'AIzaSyCshROPEm_7o7-Vob-rGwrChIJbl0PvX9M',
                       webGoogleMapsApiKey:
-                          'AIzaSyCshROPEm_7o7-Vob-rGwrChIJbl0PvX9M', // <---
+                          'AIzaSyCshROPEm_7o7-Vob-rGwrChIJbl0PvX9M',
                       startCoordinate: currentLoc,
                       endCoordinate: rutaSucursalesRecord.ubicacion!,
-                      travelMode: _travelMode, // NUEVO
+                      travelMode: _travelMode,
                       onDestinationTap: () async {
-                        // Sacar productos de esa sucursal desde el carrito
                         final items = await queryItemsRecordOnce(
                           parent: FirebaseFirestore.instance
                               .collection('carts')
@@ -407,54 +398,6 @@ class _RutaWidgetState extends State<RutaWidget> {
                           ),
                         );
                       },
-                    ),
-                  ),
-
-                  // Botón volver
-                  Align(
-                    alignment: const AlignmentDirectional(-0.87, -0.99),
-                    child: Padding(
-                      padding: const EdgeInsetsDirectional.fromSTEB(
-                          0.0, 20.0, 0.0, 0.0),
-                      child: FFButtonWidget(
-                        onPressed: () async {
-                          context.pushNamed(BuscarFarmaciaWidget.routeName);
-                        },
-                        text: 'Button',
-                        icon: const Icon(
-                          Icons.west,
-                          size: 29.0,
-                        ),
-                        options: FFButtonOptions(
-                          width: 49.0,
-                          height: 49.0,
-                          padding: const EdgeInsetsDirectional.fromSTEB(
-                              10.0, 0.0, 16.0, 0.0),
-                          iconPadding: const EdgeInsetsDirectional.fromSTEB(
-                              0.0, 0.0, 0.0, 0.0),
-                          iconColor:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                          color: FlutterFlowTheme.of(context).primaryText,
-                          textStyle:
-                              FlutterFlowTheme.of(context).titleSmall.override(
-                                    font: GoogleFonts.interTight(
-                                      fontWeight: FlutterFlowTheme.of(context)
-                                          .titleSmall
-                                          .fontWeight,
-                                      fontStyle: FlutterFlowTheme.of(context)
-                                          .titleSmall
-                                          .fontStyle,
-                                    ),
-                                    color: Colors.white,
-                                    letterSpacing: 0.0,
-                                  ),
-                          elevation: 0.0,
-                          borderSide: BorderSide(
-                            color: FlutterFlowTheme.of(context).primaryText,
-                          ),
-                          borderRadius: BorderRadius.circular(24.0),
-                        ),
-                      ),
                     ),
                   ),
 
@@ -534,7 +477,7 @@ class _RutaWidgetState extends State<RutaWidget> {
                             Align(
                               alignment: const AlignmentDirectional(0.0, 0.0),
                               child: Text(
-                                'Tu ubicación: Plaza Sucre',
+                                'Tu ubicación',
                                 style: FlutterFlowTheme.of(context)
                                     .bodyMedium
                                     .override(

@@ -67,11 +67,21 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
   final Map<PolylineId, Polyline> _polylines = {};
   final List<latlng.LatLng> _polylineCoordinates = [];
 
-  /// IMPORTANTE:
-  /// Para las llamadas HTTP (Directions / Distance Matrix) usaremos SIEMPRE
-  /// la API key "web", independientemente de la plataforma.
-  /// El SDK de mapas usa la key que está en el AndroidManifest/iOS plist.
-  String get _directionsApiKey => widget.webGoogleMapsApiKey;
+  String get _googleMapsApiKey {
+    if (kIsWeb) return widget.webGoogleMapsApiKey;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        return widget.iOSGoogleMapsApiKey;
+      case TargetPlatform.android:
+        return widget.androidGoogleMapsApiKey;
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
+      case TargetPlatform.linux:
+        return widget.webGoogleMapsApiKey;
+      default:
+        return widget.webGoogleMapsApiKey;
+    }
+  }
 
   @override
   void initState() {
@@ -124,27 +134,24 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     debugPrint('MAP::Route DESTINO = $destLat,$destLng');
     debugPrint('MAP::Route travelMode (raw) = ${widget.travelMode}');
 
-    if (_directionsApiKey.isEmpty) {
-      debugPrint('MAP::ERROR -> Directions API KEY vacía');
+    if (_googleMapsApiKey.isEmpty) {
+      debugPrint('MAP::ERROR -> Google Maps API KEY vacía');
       return;
     } else {
-      final keyPrefix = _directionsApiKey.length > 6
-          ? '${_directionsApiKey.substring(0, 6)}...'
-          : _directionsApiKey;
-      debugPrint('MAP::Usando Directions KEY (prefijo) = $keyPrefix');
+      final keyPrefix = _googleMapsApiKey.length > 6
+          ? '${_googleMapsApiKey.substring(0, 6)}...'
+          : _googleMapsApiKey;
+      debugPrint('MAP::Usando API KEY (prefijo) = $keyPrefix');
     }
 
-    // ---- SOLO MARCADOR DE DESTINO (el origen NO se dibuja) ----
+    // ---- SOLO MARCADOR DE DESTINO (sin InfoWindow de texto) ----
     final destId = '($destLat, $destLng)';
 
     _markers.add(
       Marker(
         markerId: MarkerId(destId),
         position: latlng.LatLng(destLat, destLng),
-        infoWindow: InfoWindow(
-          title: 'Destino',
-          snippet: widget.destinationAddress ?? '',
-        ),
+        // Quitamos el globo "Destino / fin"
         onTap: () {
           if (widget.onDestinationTap != null) {
             widget.onDestinationTap!();
@@ -231,7 +238,7 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       '?origin=$startLat,$startLng'
       '&destination=$destLat,$destLng'
       '&mode=$safeMode'
-      '&key=$_directionsApiKey',
+      '&key=$_googleMapsApiKey',
     );
 
     debugPrint('MAP::Directions URL = $url');
@@ -239,7 +246,6 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     final resp = await http.get(url);
     if (resp.statusCode != 200) {
       debugPrint('MAP::Directions error HTTP ${resp.statusCode}');
-      debugPrint('MAP::Directions body = ${resp.body}');
       return false;
     }
 
@@ -301,7 +307,7 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       '?origins=$startLat,$startLng'
       '&destinations=$destLat,$destLng'
       '&mode=$safeMode'
-      '&key=$_directionsApiKey',
+      '&key=$_googleMapsApiKey',
     );
 
     debugPrint('MAP::DistanceMatrix URL = $url');
@@ -309,7 +315,6 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     final resp = await http.get(url);
     if (resp.statusCode != 200) {
       debugPrint('MAP::DistanceMatrix error HTTP ${resp.statusCode}');
-      debugPrint('MAP::DistanceMatrix body = ${resp.body}');
       return;
     }
 

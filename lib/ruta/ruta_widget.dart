@@ -65,7 +65,7 @@ class _RutaWidgetState extends State<RutaWidget> {
       );
       if (placemarks.isNotEmpty) {
         final p = placemarks.first;
-        // Armamos algo tipo: "Calle Sucre, Cercado, Cochabamba"
+        // Ejemplo: "Calle Sucre, Cercado, Cochabamba"
         final parts = <String>[
           if ((p.street ?? '').isNotEmpty) p.street!,
           if ((p.subLocality ?? '').isNotEmpty) p.subLocality!,
@@ -89,7 +89,7 @@ class _RutaWidgetState extends State<RutaWidget> {
     super.dispose();
   }
 
-  // Distancia en km (fórmula de Haversine)
+  // Distancia en km (Haversine)
   double _distanceInKm(LatLng a, LatLng b) {
     const earthRadius = 6371.0; // km
     final dLat = (b.latitude - a.latitude) * math.pi / 180.0;
@@ -134,7 +134,7 @@ class _RutaWidgetState extends State<RutaWidget> {
               ),
             ),
             Text(
-              'Sucursales cercanas',
+              'Sucursales asociadas a tu carrito',
               style: FlutterFlowTheme.of(context).titleMedium.override(
                     font: GoogleFonts.inter(
                       fontWeight: FontWeight.w700,
@@ -149,7 +149,7 @@ class _RutaWidgetState extends State<RutaWidget> {
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
                 child: Text(
-                  'No hay sucursales asociadas a tu carrito dentro de 1.5 km de tu ubicación.',
+                  'No hay sucursales asociadas a tu carrito dentro del radio configurado.',
                   textAlign: TextAlign.center,
                 ),
               )
@@ -165,6 +165,7 @@ class _RutaWidgetState extends State<RutaWidget> {
                     final nombre = s.nombre.isNotEmpty ? s.nombre : 'Sucursal';
 
                     return Card(
+                      color: const Color(0xFFF5F5F5), // fondo claro
                       margin: const EdgeInsets.symmetric(vertical: 6),
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -202,6 +203,7 @@ class _RutaWidgetState extends State<RutaWidget> {
                             const SizedBox(height: 8),
                             Row(
                               children: [
+                                // A pie
                                 Expanded(
                                   child: FFButtonWidget(
                                     onPressed: () {
@@ -209,10 +211,18 @@ class _RutaWidgetState extends State<RutaWidget> {
                                       Navigator.of(context).pop();
                                     },
                                     text: 'A pie',
+                                    icon: const Icon(
+                                      Icons.directions_walk,
+                                      size: 18,
+                                    ),
                                     options: FFButtonOptions(
                                       height: 36,
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 12),
+                                      iconPadding:
+                                          const EdgeInsetsDirectional.fromSTEB(
+                                              0, 0, 0, 0),
+                                      iconColor: Colors.white,
                                       color: const Color(0xFF4CAF50),
                                       textStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
@@ -231,6 +241,7 @@ class _RutaWidgetState extends State<RutaWidget> {
                                   ),
                                 ),
                                 const SizedBox(width: 6),
+                                // Moto
                                 Expanded(
                                   child: FFButtonWidget(
                                     onPressed: () {
@@ -238,10 +249,18 @@ class _RutaWidgetState extends State<RutaWidget> {
                                       Navigator.of(context).pop();
                                     },
                                     text: 'Moto',
+                                    icon: const Icon(
+                                      Icons.motorcycle,
+                                      size: 18,
+                                    ),
                                     options: FFButtonOptions(
                                       height: 36,
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 12),
+                                      iconPadding:
+                                          const EdgeInsetsDirectional.fromSTEB(
+                                              0, 0, 0, 0),
+                                      iconColor: Colors.white,
                                       color: const Color(0xFF009FE3),
                                       textStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
@@ -260,6 +279,7 @@ class _RutaWidgetState extends State<RutaWidget> {
                                   ),
                                 ),
                                 const SizedBox(width: 6),
+                                // Auto
                                 Expanded(
                                   child: FFButtonWidget(
                                     onPressed: () {
@@ -267,10 +287,18 @@ class _RutaWidgetState extends State<RutaWidget> {
                                       Navigator.of(context).pop();
                                     },
                                     text: 'Auto',
+                                    icon: const Icon(
+                                      Icons.directions_car,
+                                      size: 18,
+                                    ),
                                     options: FFButtonOptions(
                                       height: 36,
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 12),
+                                      iconPadding:
+                                          const EdgeInsetsDirectional.fromSTEB(
+                                              0, 0, 0, 0),
+                                      iconColor: Colors.white,
                                       color: FlutterFlowTheme.of(context)
                                           .primaryText,
                                       textStyle: FlutterFlowTheme.of(context)
@@ -349,7 +377,7 @@ class _RutaWidgetState extends State<RutaWidget> {
 
         final allSucursales = sucSnap.data!;
 
-        // 🔹 Ahora filtramos por sucursales que estén en el carrito
+        // Solo sucursales que aparezcan en el carrito (por sucursalRef)
         return FutureBuilder<List<ItemsRecord>>(
           future: queryItemsRecordOnce(
             parent: FirebaseFirestore.instance
@@ -377,18 +405,15 @@ class _RutaWidgetState extends State<RutaWidget> {
 
             final cartItems = cartSnap.data!;
 
-            // Conjunto de referencias de sucursales usadas en el carrito
             final cartSucursalPaths = cartItems
                 .map((i) => i.sucursalRef?.path)
                 .whereType<String>()
                 .toSet();
 
-            // Base: SOLO sucursales asociadas a productos del carrito
             final sucursalesDeCarrito = allSucursales.where((s) {
               return cartSucursalPaths.contains(s.reference.path);
             }).toList();
 
-            // Si no hay nada en el carrito con sucursalRef, no mostramos otras
             if (sucursalesDeCarrito.isEmpty) {
               return Scaffold(
                 backgroundColor:
@@ -398,7 +423,7 @@ class _RutaWidgetState extends State<RutaWidget> {
                     child: Padding(
                       padding: const EdgeInsets.all(24.0),
                       child: Text(
-                        'No hay sucursales asociadas a los productos de tu carrito.',
+                        'No hay sucursales asociadas a los productos de tu carrito.\n\nVerifica que los ítems tengan el campo "sucursalRef" guardado.',
                         textAlign: TextAlign.center,
                         style: FlutterFlowTheme.of(context).bodyMedium.override(
                               font: GoogleFonts.inter(
@@ -416,8 +441,8 @@ class _RutaWidgetState extends State<RutaWidget> {
               );
             }
 
-            // 🔹 Radio de búsqueda (1.5 km)
-            const maxRadioKm = 1.5;
+            // Radio de búsqueda (5 km)
+            const maxRadioKm = 5.0;
             final sucursalesCercanas = sucursalesDeCarrito.where((s) {
               final loc = s.ubicacion;
               if (loc == null) return false;
@@ -430,15 +455,9 @@ class _RutaWidgetState extends State<RutaWidget> {
                 return da.compareTo(db);
               });
 
-            // Ya NO seleccionamos sucursal por defecto.
-            // Solo si el usuario toca "A pie / Moto / Auto" se asigna.
-
             final hasDestination = _selectedSucursal != null;
-
-            // Si no hay destino aún, usamos la propia ubicación como "fin"
-            final LatLng endCoord = hasDestination
-                ? _selectedSucursal!.ubicacion!
-                : currentLoc;
+            final LatLng endCoord =
+                hasDestination ? _selectedSucursal!.ubicacion! : currentLoc;
 
             return GestureDetector(
               onTap: () {
@@ -453,7 +472,7 @@ class _RutaWidgetState extends State<RutaWidget> {
                   top: true,
                   child: Stack(
                     children: [
-                      // Fondo con la ruta dibujada (o solo tu posición si no hay destino)
+                      // Fondo con la ruta dibujada
                       SizedBox(
                         width: MediaQuery.sizeOf(context).width,
                         height: MediaQuery.sizeOf(context).height,
@@ -461,7 +480,6 @@ class _RutaWidgetState extends State<RutaWidget> {
                           width: double.infinity,
                           height: double.infinity,
                           lineColor: FlutterFlowTheme.of(context).primary,
-                          // Quitamos textos tipo "Destino / fin"
                           startAddress: '',
                           destinationAddress: '',
                           iOSGoogleMapsApiKey:
@@ -475,7 +493,6 @@ class _RutaWidgetState extends State<RutaWidget> {
                           travelMode: _travelMode,
                           onDestinationTap: hasDestination
                               ? () async {
-                                  // Sacar productos de esa sucursal desde el carrito
                                   final items = await queryItemsRecordOnce(
                                     parent: FirebaseFirestore.instance
                                         .collection('carts')
@@ -491,6 +508,8 @@ class _RutaWidgetState extends State<RutaWidget> {
                                     context: context,
                                     isScrollControlled: true,
                                     backgroundColor: Colors.transparent,
+                                    barrierColor: Colors.black
+                                        .withOpacity(0.15),
                                     builder: (_) => InfoFarmaciaWidget(
                                       sucursal: _selectedSucursal!,
                                       items: items,
@@ -501,7 +520,7 @@ class _RutaWidgetState extends State<RutaWidget> {
                         ),
                       ),
 
-                      // Botón "Sucursales" para abrir el modal
+                      // Botón "Sucursales"
                       Align(
                         alignment: const AlignmentDirectional(0.85, -0.99),
                         child: Padding(
@@ -513,6 +532,8 @@ class _RutaWidgetState extends State<RutaWidget> {
                                 context: context,
                                 isScrollControlled: true,
                                 backgroundColor: Colors.transparent,
+                                barrierColor:
+                                    Colors.black.withOpacity(0.15),
                                 builder: (context) {
                                   return _buildSucursalesSheet(
                                     sucursalesCercanas,
@@ -552,7 +573,7 @@ class _RutaWidgetState extends State<RutaWidget> {
                         ),
                       ),
 
-                      // Barra inferior con texto y duración
+                      // Barra inferior con ubicación y duración
                       Align(
                         alignment: const AlignmentDirectional(0.0, 1.0),
                         child: Container(

@@ -1,8 +1,10 @@
+import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import 'dart:ui';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -64,6 +66,49 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
     const closeMinutes = 22 * 60 + 30; // 22:30
 
     return minutesNow >= openMinutes && minutesNow <= closeMinutes;
+  }
+
+  /// Guarda en Firestore el historial de la visita a esta sucursal
+  Future<void> _registrarVisita(String travelMode) async {
+    try {
+      final now = DateTime.now();
+
+      // Total de la compra en esta sucursal
+      final total = widget.items.fold<double>(0.0, (acc, it) {
+        final qty = it.qty ?? 0;
+        final price = it.unitPrice ?? 0.0;
+        return acc + qty * price;
+      });
+
+      // Detalle de productos
+      final products = widget.items.map((it) {
+        final qty = it.qty ?? 0;
+        final price = it.unitPrice ?? 0.0;
+        return {
+          'name': it.name ?? '',
+          'qty': qty,
+          'unitPrice': price,
+          'subtotal': qty * price,
+          'productRef': it.productRef,
+        };
+      }).toList();
+
+      final userRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserUid);
+
+      await userRef.collection('rutas_history').add({
+        'sucursalRef': widget.sucursal.reference,
+        'createdAt': FieldValue.serverTimestamp(),
+        'year': now.year,
+        'month': now.month,
+        'travelMode': travelMode, // 'walking' | 'moto' | 'auto'
+        'total': total,
+        'products': products,
+      });
+    } catch (e) {
+      debugPrint('Error registrando visita: $e');
+    }
   }
 
   @override
@@ -241,6 +286,7 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                     Expanded(
                       child: FFButtonWidget(
                         onPressed: () async {
+                          await _registrarVisita('walking');
                           if (widget.onWalkPressed != null) {
                             await widget.onWalkPressed!(suc);
                           }
@@ -282,6 +328,7 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                     Expanded(
                       child: FFButtonWidget(
                         onPressed: () async {
+                          await _registrarVisita('moto');
                           if (widget.onMotoPressed != null) {
                             await widget.onMotoPressed!(suc);
                           }
@@ -322,6 +369,7 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                     Expanded(
                       child: FFButtonWidget(
                         onPressed: () async {
+                          await _registrarVisita('auto');
                           if (widget.onAutoPressed != null) {
                             await widget.onAutoPressed!(suc);
                           }
@@ -364,17 +412,89 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
             // ===== RESUMEN DE PRODUCTOS =====
             Align(
               alignment: const AlignmentDirectional(-1.0, 0.0),
-              child: Text(
-                'Productos en esta sucursal: ${items.length}',
-                style: FlutterFlowTheme.of(context).bodyMedium.override(
-                      font: GoogleFonts.inter(
-                        fontWeight: FontWeight.w500,
-                        fontStyle: FlutterFlowTheme.of(context)
-                            .bodyMedium
-                            .fontStyle,
-                      ),
-                      letterSpacing: 0.0,
-                    ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Productos en esta sucursal: ${items.length}',
+                    style:
+                        FlutterFlowTheme.of(context).bodyMedium.override(
+                              font: GoogleFonts.inter(
+                                fontWeight: FontWeight.w500,
+                                fontStyle: FlutterFlowTheme.of(context)
+                                    .bodyMedium
+                                    .fontStyle,
+                              ),
+                              letterSpacing: 0.0,
+                            ),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 140,
+                    child: items.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No hay productos registrados en esta sucursal.',
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.inter(),
+                                  ),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: items.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 4),
+                            itemBuilder: (context, index) {
+                              final it = items[index];
+                              final qty = it.qty ?? 0;
+                              final price = it.unitPrice ?? 0.0;
+                              final subtotal = qty * price;
+                              return Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      it.name ?? 'Producto',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .override(
+                                            font: GoogleFonts.inter(
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'x$qty',
+                                    style: FlutterFlowTheme.of(context)
+                                        .bodySmall
+                                        .override(
+                                          font: GoogleFonts.inter(),
+                                        ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Bs. ${subtotal.toStringAsFixed(2)}',
+                                    style: FlutterFlowTheme.of(context)
+                                        .bodySmall
+                                        .override(
+                                          font: GoogleFonts.inter(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
             ),
           ],

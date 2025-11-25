@@ -17,7 +17,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:text_search/text_search.dart';
-import 'package:route_price/services/maintenance_service.dart';
 
 // <<< IMPORTANTE: servicio del carrito >>>
 import '/services/cart_fs.dart';
@@ -25,8 +24,10 @@ import '/services/cart_fs.dart';
 import 'buscar_farmacia_model.dart';
 export 'buscar_farmacia_model.dart';
 
-// cart_fs.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
+// -----------------------------------------------------------------------------
+//  CartFS (si no lo tienes en /services/cart_fs.dart, pon allí la clase
+//  y deja aquí solo el import de arriba)
+// -----------------------------------------------------------------------------
 import '/backend/schema/items_record.dart';
 
 class CartFS {
@@ -113,6 +114,9 @@ class CartFS {
   }
 }
 
+// -----------------------------------------------------------------------------
+//  BUSCAR FARMACIA WIDGET
+// -----------------------------------------------------------------------------
 class BuscarFarmaciaWidget extends StatefulWidget {
   const BuscarFarmaciaWidget({
     super.key,
@@ -182,10 +186,9 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
   void _decQty(ProductsRecord p) {
     final v = _getQty(p);
     setState(() => _qtyByProductId[p.reference.id] = (v - 1).clamp(1, 999));
-     }
+  }
 
-    /// Devuelve una sucursal para la farmacia seleccionada
-  /// (ajusta el where al nombre real del campo en tu colección).
+  /// Devuelve una sucursal para la farmacia seleccionada
   Future<DocumentReference?> _resolverSucursalParaCarrito(
       DocumentReference? farmaciaRef) async {
     if (farmaciaRef == null) return null;
@@ -204,11 +207,9 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
       return null;
     }
 
-    // Si más adelante guardas distancia en Firestore, aquí podrías elegir la más cercana.
     final sucursal = sucursales.first;
     return sucursal.reference;
   }
-
 
   /// =============== Carrito (estado local usado ANTES de persistir) =================
   void _addOrIncrementCartItem({
@@ -309,7 +310,7 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
   String _brandLogo(String slug) =>
       (_BRAND[slug]?['logo_fallback'] as String?) ??
       (_BRAND[slug]?['logo'] as String? ?? '');
-      
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<ProductsRecord>>(
@@ -391,31 +392,7 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                         ),
                   ),
                 ),
-                actions: [
-                  IconButton(
-                    tooltip: 'Backfill pharmacyIds desde skus',
-                    icon: const Icon(Icons.build_circle,
-                        color: Color(0xFF1DB954)),
-                    onPressed: () async {
-                      try {
-                        await MaintenanceService.instance
-                            .backfillPharmacyIdsFromSkus();
-                        await MaintenanceService.instance
-                            .logCoverageSample(take: 5);
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Backfill completado ✅')),
-                        );
-                      } catch (e) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error en backfill: $e')),
-                        );
-                      }
-                    },
-                  ),
-                ],
+                // (Botón mantenimiento eliminado)
                 centerTitle: false,
                 elevation: 2.0,
               ),
@@ -525,7 +502,7 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                     ),
                   ),
 
-                  // ===== LOGO + DROPDOWN (solo 3 farmacias, por slug) =====
+                  // ===== LOGO + DROPDOWN =====
                   Align(
                     alignment: const AlignmentDirectional(1.0, 0.0),
                     child: Padding(
@@ -587,7 +564,7 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                           return Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Badge/logo con fondo del color de marca
+                              // Badge/logo
                               Container(
                                 height: 32,
                                 padding:
@@ -613,7 +590,6 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                                           height: 18,
                                           fit: BoxFit.contain,
                                           errorBuilder: (c, e, s) {
-                                            // Fallback Storage (evita CORS)
                                             if (logoFallback.isNotEmpty) {
                                               return Image.network(
                                                 logoFallback,
@@ -714,15 +690,14 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                               crossAxisCount: 2,
                               crossAxisSpacing: 10.0,
                               mainAxisSpacing: 10.0,
-                              mainAxisExtent: 290.0,
+                              // un poco más altas para evitar overflow vertical
+                              childAspectRatio: 0.55,
                             ),
                             itemCount: products.length,
                             itemBuilder: (context, index) {
                               final product = products[index];
 
                               return Container(
-                                width: 170.0,
-                                height: 275.0,
                                 decoration: BoxDecoration(
                                   color: FlutterFlowTheme.of(context)
                                       .primaryBackground,
@@ -733,15 +708,17 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                                       offset: Offset(1.0, 2.0),
                                     )
                                   ],
-                                  borderRadius:
-                                      const BorderRadius.all(Radius.circular(7)),
+                                  borderRadius: const BorderRadius.all(
+                                    Radius.circular(7),
+                                  ),
                                   border: Border.all(
-                                      color: const Color(0xFFD6D6D6)),
+                                    color: const Color(0xFFD6D6D6),
+                                  ),
                                 ),
                                 child: Column(
-                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisSize: MainAxisSize.max,
                                   children: [
-                                    // ===== Imagen (SKU -> product -> placeholder) =====
+                                    // ===== Imagen =====
                                     Padding(
                                       padding:
                                           const EdgeInsetsDirectional.fromSTEB(
@@ -929,77 +906,97 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                                                   (meta['label'] as String?) ??
                                                       'Farmacia';
 
-                                              return Row(
-                                                children: [
-                                                  Text(
-                                                    'Bs. ${sku.price.toString()}',
-                                                    style: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          fontFamily:
-                                                              'Hind Vadodara',
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .primaryText,
-                                                          fontSize: 15.0,
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FontWeight.bold,
+                                              // 👉 FittedBox para evitar overflow horizontal
+                                              return FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                alignment:
+                                                    Alignment.centerLeft,
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      'Bs. ${sku.price.toString()}',
+                                                      style:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .bodyMedium
+                                                              .override(
+                                                                fontFamily:
+                                                                    'Hind Vadodara',
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .primaryText,
+                                                                fontSize: 15.0,
+                                                                letterSpacing:
+                                                                    0.0,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                              ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets
+                                                              .symmetric(
+                                                              horizontal: 6,
+                                                              vertical: 2),
+                                                      decoration:
+                                                          BoxDecoration(
+                                                        color: color
+                                                            .withOpacity(0.10),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(6),
+                                                        border: Border.all(
+                                                          color: color
+                                                              .withOpacity(
+                                                                  0.45),
                                                         ),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Container(
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        horizontal: 6,
-                                                        vertical: 2),
-                                                    decoration: BoxDecoration(
-                                                      color: color
-                                                          .withOpacity(0.10),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              6),
-                                                      border: Border.all(
-                                                          color:
-                                                              color.withOpacity(
-                                                                  0.45)),
+                                                      ),
+                                                      child: Text(
+                                                        label,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .bodySmall
+                                                                .override(
+                                                                  fontFamily:
+                                                                      'Inter',
+                                                                  fontSize: 11,
+                                                                  color: color,
+                                                                  letterSpacing:
+                                                                      0,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                      ),
                                                     ),
-                                                    child: Text(
-                                                      label,
-                                                      style: FlutterFlowTheme
-                                                              .of(context)
-                                                          .bodySmall
-                                                          .override(
-                                                            fontFamily: 'Inter',
-                                                            fontSize: 11,
-                                                            color: color,
-                                                            letterSpacing: 0,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                ],
+                                                  ],
+                                                ),
                                               );
                                             },
                                           ),
                                         ),
                                       ),
                                     ],
+
                                     const Spacer(),
 
-                                    // ===== Botón Agregar (persistencia a carts/{uid}/items) =====
+                                    // ===== Botón Agregar =====
                                     Padding(
                                       padding:
                                           const EdgeInsetsDirectional.fromSTEB(
                                               0.0, 6.0, 0.0, 8.0),
                                       child: FFButtonWidget(
                                         onPressed: () async {
-                                          // Cantidad elegida en la card
                                           final n = _getQty(product);
 
-                                          // Precio, SKU y mejor imagen disponible según farmacia
                                           double priceToUse =
                                               (product.precioActual ?? 0)
                                                   .toDouble();
@@ -1031,36 +1028,30 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                                             }
                                           }
 
-                                          // 👉 NUEVO: resolver sucursal real para esa farmacia
                                           final sucursalRefToUse =
                                               await _resolverSucursalParaCarrito(
                                                   _selectedFarmRef);
 
-                                          // Metadatos de la farmacia (para agrupar y ver ubicaciones)
                                           final slug = _selectedSlug ?? '';
                                           final label = _brandLabel(slug);
                                           final logo = _brandLogo(slug);
 
-                                          // Persistir en Firestore (CartFS)
                                           await CartFS.addOrIncrementItem(
                                             uid: currentUserUid,
                                             productRef: product.reference,
                                             skuRef: skuRefToUse,
-                                            sucursalRef:
-                                            sucursalRefToUse, // 👈 ahora sí es sucursal
+                                            sucursalRef: sucursalRefToUse,
                                             name: product.nombre ?? '',
                                             imageUrl: imageUrlToUse,
                                             unitPrice: priceToUse,
                                             qtyToAdd: n,
                                             currency: 'Bs',
                                             priceBefore: null,
-                                            // Metadatos de farmacia
                                             pharmacySlug: slug,
                                             pharmacyLabel: label,
                                             pharmacyLogo: logo,
                                           );
 
-                                          // Reinicia el selector a 1
                                           setState(() => _qtyByProductId[
                                               product.reference.id] = 1);
 
@@ -1120,54 +1111,51 @@ class _BuscarFarmaciaWidgetState extends State<BuscarFarmaciaWidget> {
                     ),
                   ),
 
-                  // FAB carrito (navega a Carrito y allí ves la lista)
-                  Align(
-                    alignment: const AlignmentDirectional(0.79, 0.99),
-                    child: Container(
-                      width: 65.0,
-                      height: 65.0,
-                      decoration: BoxDecoration(
-                        color: FlutterFlowTheme.of(context).secondaryBackground,
-                        shape: BoxShape.rectangle,
-                      ),
-                      child: FFButtonWidget(
-                        onPressed: () async {
-                          context.pushNamed(CarritoWidget.routeName);
-                        },
-                        text: '',
-                        icon: const Icon(Icons.shopping_cart_rounded,
-                            size: 45.0),
-                        options: FFButtonOptions(
-                          padding: const EdgeInsets.all(13.0),
-                          iconPadding: const EdgeInsets.all(0.0),
-                          color: const Color(0xFF1DB954),
-                          textStyle:
-                              FlutterFlowTheme.of(context).titleSmall.override(
-                                    font: GoogleFonts.interTight(
-                                      fontWeight: FlutterFlowTheme.of(context)
-                                          .titleSmall
-                                          .fontWeight,
-                                      fontStyle: FlutterFlowTheme.of(context)
-                                          .titleSmall
-                                          .fontStyle,
-                                    ),
-                                    color: Colors.white,
-                                    fontSize: 16.0,
-                                    letterSpacing: 0.0,
-                                  ),
-                          elevation: 0.0,
-                          borderSide: BorderSide(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                          ),
-                          borderRadius: BorderRadius.circular(24.0),
-                        ),
-                      ),
-                    ),
-                  ),
-
+                  const SizedBox(height: 8.0),
                   const Icon(Icons.arrow_back, size: 24.0),
+                  const SizedBox(height: 8.0),
                 ],
+              ),
+            ),
+
+            // ====== FAB carrito (más pequeño para evitar overflow) ======
+            floatingActionButton: SizedBox(
+              width: 54.0,
+              height: 54.0,
+              child: FFButtonWidget(
+                onPressed: () async {
+                  context.pushNamed(CarritoWidget.routeName);
+                },
+                text: '',
+                icon: const Icon(
+                  Icons.shopping_cart_rounded,
+                  size: 26.0,
+                ),
+                options: FFButtonOptions(
+                  width: 54.0,
+                  height: 54.0,
+                  padding: const EdgeInsets.all(10.0),
+                  iconPadding: const EdgeInsets.all(0.0),
+                  color: const Color(0xFF1DB954),
+                  textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                        font: GoogleFonts.interTight(
+                          fontWeight: FlutterFlowTheme.of(context)
+                              .titleSmall
+                              .fontWeight,
+                          fontStyle: FlutterFlowTheme.of(context)
+                              .titleSmall
+                              .fontStyle,
+                        ),
+                        color: Colors.white,
+                        fontSize: 16.0,
+                        letterSpacing: 0.0,
+                      ),
+                  elevation: 4.0,
+                  borderSide: BorderSide(
+                    color: FlutterFlowTheme.of(context).secondaryBackground,
+                  ),
+                  borderRadius: BorderRadius.circular(27.0),
+                ),
               ),
             ),
           ),

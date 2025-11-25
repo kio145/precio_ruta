@@ -1,8 +1,10 @@
+import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import 'dart:ui';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -55,7 +57,7 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
     super.dispose();
   }
 
-  /// Horario fijo: 07:00 - 22:30 (puedes ajustar esto o luego leerlo de Firestore)
+  /// Horario fijo: 07:00 - 22:30
   bool _isOpenNow() {
     final now = TimeOfDay.fromDateTime(DateTime.now());
     final minutesNow = now.hour * 60 + now.minute;
@@ -66,9 +68,51 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
     return minutesNow >= openMinutes && minutesNow <= closeMinutes;
   }
 
+  /// Guarda en Firestore el historial de la visita a esta sucursal
+  Future<void> _registrarVisita(String travelMode) async {
+    try {
+      final now = DateTime.now();
+
+      // Total de la compra en esta sucursal
+      final total = widget.items.fold<double>(0.0, (acc, it) {
+        final qty = it.qty ?? 0;
+        final price = it.unitPrice ?? 0.0;
+        return acc + qty * price;
+      });
+
+      // Detalle de productos
+      final products = widget.items.map((it) {
+        final qty = it.qty ?? 0;
+        final price = it.unitPrice ?? 0.0;
+        return {
+          'name': it.name ?? '',
+          'qty': qty,
+          'unitPrice': price,
+          'subtotal': qty * price,
+          'productRef': it.productRef,
+        };
+      }).toList();
+
+      final userRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserUid);
+
+      await userRef.collection('rutas_history').add({
+        'sucursalRef': widget.sucursal.reference,
+        'createdAt': FieldValue.serverTimestamp(),
+        'year': now.year,
+        'month': now.month,
+        'travelMode': travelMode, // 'walking' | 'moto' | 'auto'
+        'total': total,
+        'products': products,
+      });
+    } catch (e) {
+      debugPrint('Error registrando visita: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Para que escuche cambios en FFAppState (routeDuration, etc.)
     context.watch<FFAppState>();
 
     final suc = widget.sucursal;
@@ -229,7 +273,7 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
               ),
             ),
 
-            // ===== TIEMPOS A PIE / MOTO / AUTO =====
+            // ===== BOTONES A PIE / MOTO / AUTO =====
             Align(
               alignment: const AlignmentDirectional(0.0, 0.0),
               child: Padding(
@@ -242,43 +286,38 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                     Expanded(
                       child: FFButtonWidget(
                         onPressed: () async {
+                          await _registrarVisita('walking');
                           if (widget.onWalkPressed != null) {
                             await widget.onWalkPressed!(suc);
                           }
                         },
-                        text: FFAppState().routeDuration.isNotEmpty
-                            ? FFAppState().routeDuration
-                            : '16 min',
+                        text: 'A pie',
                         icon: const Icon(
                           Icons.directions_walk,
-                          size: 22.89,
+                          size: 20,
                         ),
                         options: FFButtonOptions(
-                          height: 29.0,
+                          height: 32.0,
                           padding: const EdgeInsetsDirectional.fromSTEB(
-                              2.0, 0.0, 4.0, 0.0),
+                              4.0, 0.0, 4.0, 0.0),
                           iconPadding: const EdgeInsetsDirectional.fromSTEB(
                               0.0, 0.0, 0.0, 0.0),
-                          iconColor: const Color(0xFF49CA77),
-                          color: FlutterFlowTheme.of(context)
-                              .secondaryBackground,
+                          iconColor: Colors.white,
+                          color: const Color(0xFF49CA77),
                           textStyle:
                               FlutterFlowTheme.of(context).titleSmall.override(
                                     font: GoogleFonts.interTight(
-                                      fontWeight: FontWeight.normal,
+                                      fontWeight: FontWeight.w600,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
                                           .fontStyle,
                                     ),
-                                    color: const Color(0xFF49CA77),
+                                    color: Colors.white,
                                     fontSize: 13.0,
                                     letterSpacing: 0.0,
                                   ),
                           elevation: 0.0,
-                          borderSide: const BorderSide(
-                            color: Color(0xFF49CA77),
-                          ),
-                          borderRadius: BorderRadius.circular(4.0),
+                          borderRadius: BorderRadius.circular(6.0),
                         ),
                       ),
                     ),
@@ -289,42 +328,37 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                     Expanded(
                       child: FFButtonWidget(
                         onPressed: () async {
+                          await _registrarVisita('moto');
                           if (widget.onMotoPressed != null) {
                             await widget.onMotoPressed!(suc);
                           }
                         },
-                        text: FFAppState().routeDuration.isNotEmpty
-                            ? FFAppState().routeDuration
-                            : '16 min',
+                        text: 'Moto',
                         icon: const Icon(
                           Icons.motorcycle,
-                          size: 17.4,
+                          size: 18,
                         ),
                         options: FFButtonOptions(
-                          height: 29.0,
+                          height: 32.0,
                           padding: const EdgeInsetsDirectional.fromSTEB(
-                              2.0, 0.0, 4.0, 0.0),
+                              4.0, 0.0, 4.0, 0.0),
                           iconPadding: const EdgeInsetsDirectional.fromSTEB(
                               0.0, 0.0, 0.0, 0.0),
-                          color: FlutterFlowTheme.of(context)
-                              .secondaryBackground,
+                          color: const Color(0xFF009FE3),
                           textStyle:
                               FlutterFlowTheme.of(context).titleSmall.override(
                                     font: GoogleFonts.interTight(
-                                      fontWeight: FontWeight.normal,
+                                      fontWeight: FontWeight.w600,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
                                           .fontStyle,
                                     ),
-                                    color: const Color(0xFF49CA77),
+                                    color: Colors.white,
                                     fontSize: 13.0,
                                     letterSpacing: 0.0,
                                   ),
                           elevation: 0.0,
-                          borderSide: const BorderSide(
-                            color: Color(0xFF49CA77),
-                          ),
-                          borderRadius: BorderRadius.circular(4.0),
+                          borderRadius: BorderRadius.circular(6.0),
                         ),
                       ),
                     ),
@@ -335,43 +369,38 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                     Expanded(
                       child: FFButtonWidget(
                         onPressed: () async {
+                          await _registrarVisita('auto');
                           if (widget.onAutoPressed != null) {
                             await widget.onAutoPressed!(suc);
                           }
                         },
-                        text: FFAppState().routeDuration.isNotEmpty
-                            ? FFAppState().routeDuration
-                            : '16 min',
+                        text: 'Auto',
                         icon: const Icon(
                           Icons.directions_car,
-                          size: 18.99,
+                          size: 18,
                         ),
                         options: FFButtonOptions(
-                          height: 29.0,
+                          height: 32.0,
                           padding: const EdgeInsetsDirectional.fromSTEB(
-                              2.0, 0.0, 4.0, 0.0),
+                              4.0, 0.0, 4.0, 0.0),
                           iconPadding: const EdgeInsetsDirectional.fromSTEB(
                               0.0, 0.0, 0.0, 0.0),
-                          iconColor: const Color(0xFF49CA77),
-                          color: FlutterFlowTheme.of(context)
-                              .secondaryBackground,
+                          iconColor: Colors.white,
+                          color: const Color(0xFF333333),
                           textStyle:
                               FlutterFlowTheme.of(context).titleSmall.override(
                                     font: GoogleFonts.interTight(
-                                      fontWeight: FontWeight.normal,
+                                      fontWeight: FontWeight.w600,
                                       fontStyle: FlutterFlowTheme.of(context)
                                           .titleSmall
                                           .fontStyle,
                                     ),
-                                    color: const Color(0xFF49CA77),
+                                    color: Colors.white,
                                     fontSize: 13.0,
                                     letterSpacing: 0.0,
                                   ),
                           elevation: 0.0,
-                          borderSide: const BorderSide(
-                            color: Color(0xFF49CA77),
-                          ),
-                          borderRadius: BorderRadius.circular(4.0),
+                          borderRadius: BorderRadius.circular(6.0),
                         ),
                       ),
                     ),
@@ -383,17 +412,89 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
             // ===== RESUMEN DE PRODUCTOS =====
             Align(
               alignment: const AlignmentDirectional(-1.0, 0.0),
-              child: Text(
-                'Productos en esta sucursal: ${items.length}',
-                style: FlutterFlowTheme.of(context).bodyMedium.override(
-                      font: GoogleFonts.inter(
-                        fontWeight: FontWeight.w500,
-                        fontStyle: FlutterFlowTheme.of(context)
-                            .bodyMedium
-                            .fontStyle,
-                      ),
-                      letterSpacing: 0.0,
-                    ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Productos en esta sucursal: ${items.length}',
+                    style:
+                        FlutterFlowTheme.of(context).bodyMedium.override(
+                              font: GoogleFonts.inter(
+                                fontWeight: FontWeight.w500,
+                                fontStyle: FlutterFlowTheme.of(context)
+                                    .bodyMedium
+                                    .fontStyle,
+                              ),
+                              letterSpacing: 0.0,
+                            ),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 140,
+                    child: items.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No hay productos registrados en esta sucursal.',
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.inter(),
+                                  ),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: items.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 4),
+                            itemBuilder: (context, index) {
+                              final it = items[index];
+                              final qty = it.qty ?? 0;
+                              final price = it.unitPrice ?? 0.0;
+                              final subtotal = qty * price;
+                              return Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      it.name ?? 'Producto',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .override(
+                                            font: GoogleFonts.inter(
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'x$qty',
+                                    style: FlutterFlowTheme.of(context)
+                                        .bodySmall
+                                        .override(
+                                          font: GoogleFonts.inter(),
+                                        ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Bs. ${subtotal.toStringAsFixed(2)}',
+                                    style: FlutterFlowTheme.of(context)
+                                        .bodySmall
+                                        .override(
+                                          font: GoogleFonts.inter(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
             ),
           ],

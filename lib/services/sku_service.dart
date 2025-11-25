@@ -25,8 +25,8 @@ class SkuService {
     final pharmacyRef = _db.collection('farmacias').doc(pharmacyId);
 
     await productRef.collection('skus').add({
-      'pharmacyRef': pharmacyRef,               // ✅ DocRef
-      'productId': productRef,                  // ✅ DocRef
+      'pharmacyRef': pharmacyRef,               
+      'productId': productRef,                  
       'price': price,
       'currency': 'Bs',
       'capturedAt': FieldValue.serverTimestamp(),

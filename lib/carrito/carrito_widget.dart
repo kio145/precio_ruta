@@ -12,11 +12,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+// Servicios
+import '/services/ai_cart_service.dart';
+import '/services/cart_fs.dart';
+
 import 'carrito_model.dart';
 export 'carrito_model.dart';
-
-// Servicio Firestore del carrito
-import '/services/cart_fs.dart';
 
 class CarritoWidget extends StatefulWidget {
   const CarritoWidget({super.key});
@@ -31,6 +32,9 @@ class CarritoWidget extends StatefulWidget {
 class _CarritoWidgetState extends State<CarritoWidget> {
   late CarritoModel _model;
   final scaffoldKey = GlobalKey<ScaffoldState>();
+
+  bool _aiLoading = false;
+  String? _aiMessage;
 
   @override
   void initState() {
@@ -63,8 +67,10 @@ class _CarritoWidgetState extends State<CarritoWidget> {
   Map<String, _FarmGroup> _groupByPharmacy(List<ItemsRecord> items) {
     final Map<String, _FarmGroup> groups = {};
     for (final it in items) {
-      final slug = (it.pharmacySlug).isNotEmpty ? it.pharmacySlug : 'desconocida';
-      final label = (it.pharmacyLabel).isNotEmpty ? it.pharmacyLabel : 'Farmacia';
+      final slug =
+          (it.pharmacySlug).isNotEmpty ? it.pharmacySlug : 'desconocida';
+      final label =
+          (it.pharmacyLabel).isNotEmpty ? it.pharmacyLabel : 'Farmacia';
       final logo = it.pharmacyLogo;
 
       groups.putIfAbsent(
@@ -98,7 +104,7 @@ class _CarritoWidgetState extends State<CarritoWidget> {
             focusNode: _model.campoBusqueda2FocusNode,
             autofocus: false,
             textInputAction: TextInputAction.done,
-            onChanged: (_) => safeSetState(() {}), // <<< para refrescar el filtro
+            onChanged: (_) => safeSetState(() {}),
             decoration: InputDecoration(
               isDense: true,
               hintText: 'Buscar en tu carrito...',
@@ -140,6 +146,86 @@ class _CarritoWidgetState extends State<CarritoWidget> {
     );
   }
 
+  // ====== Botón IA ======
+  Future<void> _onAIAdvicePressed() async {
+    setState(() {
+      _aiLoading = true;
+      _aiMessage = null;
+    });
+
+    final text = await AICartService().getCartAdviceFromAI();
+
+    if (!mounted) return;
+
+    setState(() {
+      _aiLoading = false;
+      _aiMessage = text;
+    });
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: MediaQuery.viewInsetsOf(context).add(
+            const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.smart_toy_rounded,
+                    size: 28,
+                    color: FlutterFlowTheme.of(context).primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Recomendación de IA',
+                    style: FlutterFlowTheme.of(context)
+                        .titleMedium
+                        .override(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _aiMessage ?? 'No se recibió ningún mensaje.',
+                style: FlutterFlowTheme.of(context).bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FFButtonWidget(
+                  onPressed: () => Navigator.pop(context),
+                  text: 'Cerrar',
+                  options: FFButtonOptions(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 0,
+                    ),
+                    color: FlutterFlowTheme.of(context).primary,
+                    textStyle: FlutterFlowTheme.of(context)
+                        .titleSmall
+                        .override(color: Colors.white),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
@@ -169,7 +255,8 @@ class _CarritoWidgetState extends State<CarritoWidget> {
             backgroundColor: const Color(0xFF222222),
             automaticallyImplyLeading: false,
             leading: Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(11.0, 0.0, 0.0, 0.0),
+              padding:
+                  const EdgeInsetsDirectional.fromSTEB(11.0, 0.0, 0.0, 0.0),
               child: FlutterFlowIconButton(
                 borderColor: Colors.transparent,
                 borderRadius: 30.0,
@@ -186,7 +273,8 @@ class _CarritoWidgetState extends State<CarritoWidget> {
               ),
             ),
             title: Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(11.0, 0.0, 0.0, 0.0),
+              padding:
+                  const EdgeInsetsDirectional.fromSTEB(11.0, 0.0, 0.0, 0.0),
               child: Text(
                 'BUSCAR  FARMACIA',
                 style: FlutterFlowTheme.of(context).headlineMedium.override(
@@ -230,15 +318,16 @@ class _CarritoWidgetState extends State<CarritoWidget> {
               final visibleItems = query.isEmpty
                   ? items
                   : items
-                      .where((it) =>
-                          it.name.toLowerCase().contains(query))
+                      .where(
+                        (it) => it.name.toLowerCase().contains(query),
+                      )
                       .toList();
 
               // Agrupar por farmacia usando solo los items filtrados
               final groupsMap = _groupByPharmacy(visibleItems);
               final groups = groupsMap.values.toList();
 
-              // Total general del carrito (con todos los items, no solo los filtrados)
+              // Total general del carrito (con todos los items)
               final grandTotal = items.fold<double>(
                 0,
                 (s, it) => s + _subtotal(it),
@@ -251,7 +340,8 @@ class _CarritoWidgetState extends State<CarritoWidget> {
                   // Lista por grupos (farmacias)
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 0),
+                      padding:
+                          const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 0),
                       child: groups.isEmpty
                           ? const Center(
                               child: Text(
@@ -294,9 +384,8 @@ class _CarritoWidgetState extends State<CarritoWidget> {
                                                 _safeImg(g.logo),
                                                 height: 30,
                                                 fit: BoxFit.contain,
-                                                errorBuilder:
-                                                    (_, __, ___) =>
-                                                        const SizedBox(),
+                                                errorBuilder: (_, __, ___) =>
+                                                    const SizedBox(),
                                               ),
                                             const SizedBox(width: 8),
                                             Expanded(
@@ -361,9 +450,8 @@ class _CarritoWidgetState extends State<CarritoWidget> {
                                                                 .of(context)
                                                             .bodyMedium
                                                             .override(
-                                                              font:
-                                                                  GoogleFonts
-                                                                      .inter(
+                                                              font: GoogleFonts
+                                                                  .inter(
                                                                 fontWeight: FlutterFlowTheme.of(
                                                                         context)
                                                                     .bodyMedium
@@ -386,9 +474,8 @@ class _CarritoWidgetState extends State<CarritoWidget> {
                                                                 .of(context)
                                                             .labelSmall
                                                             .override(
-                                                              font:
-                                                                  GoogleFonts
-                                                                      .inter(
+                                                              font: GoogleFonts
+                                                                  .inter(
                                                                 fontWeight: FlutterFlowTheme.of(
                                                                         context)
                                                                     .labelSmall
@@ -436,8 +523,8 @@ class _CarritoWidgetState extends State<CarritoWidget> {
 
                                                 // Stepper: − qty +
                                                 Container(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
                                                     horizontal: 6,
                                                     vertical: 2,
                                                   ),
@@ -559,7 +646,7 @@ class _CarritoWidgetState extends State<CarritoWidget> {
                     ),
                   ),
 
-                  // Total general + Botón inferior
+                  // Total general
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
                     child: Row(
@@ -571,8 +658,8 @@ class _CarritoWidgetState extends State<CarritoWidget> {
                         ),
                         Text(
                           'Bs. ${grandTotal.toStringAsFixed(2)}',
-                          style: FlutterFlowTheme.of(context).bodyMedium
-                              .override(
+                          style:
+                              FlutterFlowTheme.of(context).bodyMedium.override(
                             font: GoogleFonts.inter(
                               fontWeight: FontWeight.w700,
                               fontStyle: FlutterFlowTheme.of(context)
@@ -585,6 +672,43 @@ class _CarritoWidgetState extends State<CarritoWidget> {
                     ),
                   ),
 
+                  // Botón IA (general para todo el carrito)
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: FFButtonWidget(
+                            onPressed:
+                                _aiLoading ? null : _onAIAdvicePressed,
+                            text: _aiLoading
+                                ? 'Consultando IA...'
+                                : 'Mejorar carrito con IA',
+                            icon: const Icon(
+                              Icons.smart_toy_rounded,
+                              size: 18,
+                            ),
+                            options: FFButtonOptions(
+                              height: 44,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              color: FlutterFlowTheme.of(context).secondary,
+                              textStyle: FlutterFlowTheme.of(context)
+                                  .titleSmall
+                                  .override(
+                                    color: FlutterFlowTheme.of(context)
+                                        .primaryText,
+                                  ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Botón "Ver ubicaciones"
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 10.0),
                     child: FFButtonWidget(
@@ -595,9 +719,12 @@ class _CarritoWidgetState extends State<CarritoWidget> {
                       options: FFButtonOptions(
                         width: 206.0,
                         height: 41.0,
-                        padding:
-                            const EdgeInsetsDirectional.fromSTEB(
-                                16.0, 0.0, 16.0, 0.0),
+                        padding: const EdgeInsetsDirectional.fromSTEB(
+                          16.0,
+                          0.0,
+                          16.0,
+                          0.0,
+                        ),
                         color: const Color.fromARGB(255, 33, 86, 52),
                         textStyle: FlutterFlowTheme.of(context)
                             .titleSmall

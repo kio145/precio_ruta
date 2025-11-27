@@ -31,6 +31,18 @@ class RouteViewStatic extends StatefulWidget {
     this.destinationAddress,
     this.travelMode = 'driving', // 'walking' | 'driving' | ...
     this.onDestinationTap,
+
+    /// Mostrar o no el marcador azul del origen
+    this.showStartMarker = true,
+
+    /// Sucursales a marcar con pines rojos
+    this.branchMarkers,
+
+    /// Misma lista de sucursales (para saber cuál se tocó)
+    this.branchSucursales,
+
+    /// Callback al tocar un pin rojo
+    this.onBranchTap,
   }) : super(key: key);
 
   final double? height;
@@ -53,6 +65,18 @@ class RouteViewStatic extends StatefulWidget {
 
   /// Se ejecuta cuando el usuario toca el marcador de destino
   final VoidCallback? onDestinationTap;
+
+  /// Si true, se pone un marcador en el origen
+  final bool showStartMarker;
+
+  /// Coordenadas de sucursales (LatLng de FlutterFlow)
+  final List<LatLng>? branchMarkers;
+
+  /// Registros de sucursales en el mismo orden que branchMarkers
+  final List<SucursalesRecord>? branchSucursales;
+
+  /// Callback al tocar un pin de sucursal
+  final Future<void> Function(SucursalesRecord sucursal)? onBranchTap;
 
   @override
   _RouteViewStaticState createState() => _RouteViewStaticState();
@@ -93,16 +117,33 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     _initialLocation = CameraPosition(target: startCoordinate, zoom: 14);
   }
 
+  bool _sameBranchMarkers(List<LatLng>? a, List<LatLng>? b) {
+    if (identical(a, b)) return true;
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].latitude != b[i].latitude ||
+          a[i].longitude != b[i].longitude) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   @override
   void didUpdateWidget(covariant RouteViewStatic oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Si cambia el origen, destino o modo de viaje, recalculamos la ruta
-    if (oldWidget.startCoordinate != widget.startCoordinate ||
-        oldWidget.endCoordinate != widget.endCoordinate ||
-        oldWidget.travelMode != widget.travelMode) {
-      if (mapController != null) {
-        _calculateAndDrawRoute();
-      }
+    final coordsChanged =
+        oldWidget.startCoordinate != widget.startCoordinate ||
+        oldWidget.endCoordinate != widget.endCoordinate;
+    final modeChanged = oldWidget.travelMode != widget.travelMode;
+    final markersChanged =
+        !_sameBranchMarkers(oldWidget.branchMarkers, widget.branchMarkers);
+
+    if ((coordsChanged || modeChanged || markersChanged) &&
+        mapController != null) {
+      _calculateAndDrawRoute();
     }
   }
 
@@ -115,7 +156,6 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
   // ====== ROUTE CALC ======
 
   Future<void> _calculateAndDrawRoute() async {
-    // Limpia estado previo
     setState(() {
       _markers.clear();
       _polylines.clear();
@@ -123,13 +163,11 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       _placeDistance = null;
     });
 
-    // Coordenadas
     final double startLat = widget.startCoordinate.latitude;
     final double startLng = widget.startCoordinate.longitude;
     final double destLat = widget.endCoordinate.latitude;
     final double destLng = widget.endCoordinate.longitude;
 
-    // Logs para debug
     debugPrint('MAP::Route ORIGEN = $startLat,$startLng');
     debugPrint('MAP::Route DESTINO = $destLat,$destLng');
     debugPrint('MAP::Route travelMode (raw) = ${widget.travelMode}');
@@ -144,14 +182,53 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       debugPrint('MAP::Usando API KEY (prefijo) = $keyPrefix');
     }
 
-    // ---- SOLO MARCADOR DE DESTINO (sin InfoWindow de texto) ----
-    final destId = '($destLat, $destLng)';
+    // === MARCADORES ===
 
+    // Origen (azul)
+    if (widget.showStartMarker) {
+      _markers.add(
+        Marker(
+          markerId: const MarkerId('start'),
+          position: latlng.LatLng(startLat, startLng),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueAzure,
+          ),
+        ),
+      );
+    }
+
+    // Sucursales (rojo, cada una con su SucursalesRecord)
+    if (widget.branchMarkers != null) {
+      for (int i = 0; i < widget.branchMarkers!.length; i++) {
+        final b = widget.branchMarkers![i];
+        final suc = (widget.branchSucursales != null &&
+                i < widget.branchSucursales!.length)
+            ? widget.branchSucursales![i]
+            : null;
+
+        _markers.add(
+          Marker(
+            markerId: MarkerId('branch_$i'),
+            position: latlng.LatLng(b.latitude, b.longitude),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueRed,
+            ),
+            onTap: (suc != null && widget.onBranchTap != null)
+                ? () async {
+                    await widget.onBranchTap!(suc);
+                  }
+                : null,
+          ),
+        );
+      }
+    }
+
+    // Destino (marcador normal, lo dejamos también en rojo por compatibilidad)
+    final destId = 'dest_marker';
     _markers.add(
       Marker(
         markerId: MarkerId(destId),
         position: latlng.LatLng(destLat, destLng),
-        // Quitamos el globo "Destino / fin"
         onTap: () {
           if (widget.onDestinationTap != null) {
             widget.onDestinationTap!();
@@ -160,23 +237,42 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       ),
     );
 
-    // Ajustar cámara para ver ambos puntos (origen + destino)
-    final southWest = latlng.LatLng(
-      (startLat <= destLat) ? startLat : destLat,
-      (startLng <= destLng) ? startLng : destLng,
-    );
-    final northEast = latlng.LatLng(
-      (startLat <= destLat) ? destLat : startLat,
-      (startLng <= destLng) ? destLng : startLng,
-    );
-    await mapController?.animateCamera(
-      CameraUpdate.newLatLngBounds(
-        LatLngBounds(southwest: southWest, northeast: northEast),
-        60.0,
-      ),
-    );
+    // === BOUNDS PARA VER TODO ===
+    final List<latlng.LatLng> boundsPoints = [];
+    boundsPoints.add(latlng.LatLng(startLat, startLng));
+    boundsPoints.add(latlng.LatLng(destLat, destLng));
 
-    // 1) Directions API para polyline (usando el travelMode recibido)
+    if (widget.branchMarkers != null) {
+      for (final b in widget.branchMarkers!) {
+        boundsPoints.add(latlng.LatLng(b.latitude, b.longitude));
+      }
+    }
+
+    if (boundsPoints.isNotEmpty) {
+      double minLat = boundsPoints.first.latitude;
+      double maxLat = boundsPoints.first.latitude;
+      double minLng = boundsPoints.first.longitude;
+      double maxLng = boundsPoints.first.longitude;
+
+      for (final p in boundsPoints) {
+        if (p.latitude < minLat) minLat = p.latitude;
+        if (p.latitude > maxLat) maxLat = p.latitude;
+        if (p.longitude < minLng) minLng = p.longitude;
+        if (p.longitude > maxLng) maxLng = p.longitude;
+      }
+
+      final southWest = latlng.LatLng(minLat, minLng);
+      final northEast = latlng.LatLng(maxLat, maxLng);
+
+      await mapController?.animateCamera(
+        CameraUpdate.newLatLngBounds(
+          LatLngBounds(southwest: southWest, northeast: northEast),
+          60.0,
+        ),
+      );
+    }
+
+    // 1) Directions API
     final routeOk = await _fetchDirectionsAndBuildPolyline(
       startLat,
       startLng,
@@ -185,7 +281,7 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       widget.travelMode,
     );
 
-    // 2) Distancia total en km + Distance Matrix para duración
+    // 2) Distancia + duración
     if (routeOk && _polylineCoordinates.length >= 2) {
       double totalKm = 0.0;
       for (int i = 0; i < _polylineCoordinates.length - 1; i++) {
@@ -199,7 +295,6 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       _placeDistance = totalKm.toStringAsFixed(2);
       FFAppState().routeDistance = '$_placeDistance km';
 
-      // Distance Matrix para estimar la duración
       await _updateDurationWithDistanceMatrix(
         startLat,
         startLng,
@@ -212,7 +307,6 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     setState(() {});
   }
 
-  // Normaliza el modo de viaje y asegura valores válidos
   String _normalizeMode(String mode) {
     var m = (mode.isEmpty ? 'driving' : mode.toLowerCase());
     const allowed = ['driving', 'walking', 'bicycling', 'transit'];
@@ -223,7 +317,6 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     return m;
   }
 
-  // Pide Directions API y decodifica overview_polyline
   Future<bool> _fetchDirectionsAndBuildPolyline(
     double startLat,
     double startLng,
@@ -292,7 +385,6 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     return true;
   }
 
-  // Distance Matrix para estimación de duración
   Future<void> _updateDurationWithDistanceMatrix(
     double startLat,
     double startLng,
@@ -341,7 +433,6 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       final durationText =
           (elem['duration']?['text'] as String?) ?? '';
       if (durationText.isNotEmpty) {
-        // Ej: "12 min"
         FFAppState().routeDuration = durationText;
         debugPrint('MAP::Duration = $durationText');
       }
@@ -350,8 +441,8 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     }
   }
 
-  // Haversine entre 2 coordenadas (km)
-  double _coordinateDistance(double lat1, double lon1, double lat2, double lon2) {
+  double _coordinateDistance(
+      double lat1, double lon1, double lat2, double lon2) {
     final p = 0.017453292519943295; // pi/180
     final c = cos;
     final a = 0.5 - c((lat2 - lat1) * p) / 2 +
@@ -359,7 +450,6 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
     return 12742 * asin(sqrt(a));
   }
 
-  /// Decodifica una polyline encoded de Google (retorna puntos lat/lng)
   List<latlng.LatLng> _decodePolyline(String encoded) {
     final List<latlng.LatLng> points = [];
     int index = 0, len = encoded.length;

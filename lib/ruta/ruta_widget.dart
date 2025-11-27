@@ -142,6 +142,8 @@ class _RutaWidgetState extends State<RutaWidget> {
           .doc(currentUserUid);
 
       await userRef.collection('rutas_history').add({
+        'userRef': userRef,
+        'uid': currentUserUid,
         'sucursalRef': sucursal.reference,
         'createdAt': FieldValue.serverTimestamp(),
         'year': now.year,
@@ -149,6 +151,7 @@ class _RutaWidgetState extends State<RutaWidget> {
         'travelMode': travelMode, // 'walking' | 'moto' | 'auto'
         'total': total,
         'products': products,
+        'source': 'ruta_widget',
       });
     } catch (e) {
       debugPrint('Error registrando visita desde RutaWidget: $e');
@@ -398,6 +401,58 @@ class _RutaWidgetState extends State<RutaWidget> {
     );
   }
 
+  Future<void> _abrirInfoParaSucursal(SucursalesRecord sucursal) async {
+    // Traer solo los ítems de esa sucursal en el carrito
+    final items = await queryItemsRecordOnce(
+      parent: FirebaseFirestore.instance
+          .collection('carts')
+          .doc(currentUserUid),
+      queryBuilder: (q) => q.where(
+        'sucursalRef',
+        isEqualTo: sucursal.reference,
+      ),
+    );
+
+    // Actualizar sucursal seleccionada (para la ruta)
+    setState(() {
+      _selectedSucursal = sucursal;
+      // Mantengo el travelMode actual, o podrías poner 'driving' por defecto.
+    });
+
+    // Abrir el modal de InfoFarmacia
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.15),
+      builder: (_) => InfoFarmaciaWidget(
+        sucursal: sucursal,
+        items: items,
+        onWalkPressed: (SucursalesRecord s) async {
+          setState(() {
+            _selectedSucursal = s;
+            _travelMode = 'walking';
+          });
+          await _registrarVisita(s, items, 'walking');
+        },
+        onMotoPressed: (SucursalesRecord s) async {
+          setState(() {
+            _selectedSucursal = s;
+            _travelMode = 'driving';
+          });
+          await _registrarVisita(s, items, 'moto');
+        },
+        onAutoPressed: (SucursalesRecord s) async {
+          setState(() {
+            _selectedSucursal = s;
+            _travelMode = 'driving';
+          });
+          await _registrarVisita(s, items, 'auto');
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
@@ -521,15 +576,41 @@ class _RutaWidgetState extends State<RutaWidget> {
                 return da.compareTo(db);
               });
 
+            // === NUEVO: sucursal más cercana por farmacia para los marcadores ===
+            final Map<String, SucursalesRecord> mejoresPorFarmacia = {};
+            final Map<String, double> mejorDistPorFarmacia = {};
+
+            for (final s in sucursalesCercanas) {
+              final farmaciaPath = s.farmaciaRef?.path;
+              if (farmaciaPath == null || s.ubicacion == null) continue;
+
+              final d = _distanceInKm(currentLoc, s.ubicacion!);
+              final prevBestDist = mejorDistPorFarmacia[farmaciaPath];
+
+              if (prevBestDist == null || d < prevBestDist) {
+                mejoresPorFarmacia[farmaciaPath] = s;
+                mejorDistPorFarmacia[farmaciaPath] = d;
+              }
+            }
+
+            // Estas son las sucursales que tendrán PIN en el mapa
+            final markerSucursales = mejoresPorFarmacia.values.toList();
+
             // Si no hay sucursal seleccionada aún, usar la más cercana
-            if (_selectedSucursal == null && sucursalesCercanas.isNotEmpty) {
-              _selectedSucursal = sucursalesCercanas.first;
+            if (_selectedSucursal == null && markerSucursales.isNotEmpty) {
+              _selectedSucursal = markerSucursales.first;
               _travelMode = 'driving'; // por defecto auto/moto
             }
 
             final hasDestination = _selectedSucursal != null;
             final LatLng endCoord =
                 hasDestination ? _selectedSucursal!.ubicacion! : currentLoc;
+
+            // Coordenadas de los marcadores (una sucursal por farmacia)
+            final markerCoords = markerSucursales
+                .where((s) => s.ubicacion != null)
+                .map((s) => s.ubicacion!)
+                .toList();
 
             return GestureDetector(
               onTap: () {
@@ -563,52 +644,22 @@ class _RutaWidgetState extends State<RutaWidget> {
                           startCoordinate: currentLoc,
                           endCoordinate: endCoord,
                           travelMode: _travelMode,
+
+                          // 👇 NUEVOS PARÁMETROS
+                          showStartMarker: false, // no mostrar pin en tu ubicación
+                          branchMarkers: markerCoords, // pines rojos de sucursales
+                          branchSucursales: markerSucursales,
+
+                          // Cuando tocas un pin rojo
+                          onBranchTap: (sucursal) async {
+                            await _abrirInfoParaSucursal(sucursal);
+                          },
+
+                          // 🔹 Cuando tocas el marcador de destino (la seleccionada)
                           onDestinationTap: hasDestination
                               ? () async {
-                                  final items = await queryItemsRecordOnce(
-                                    parent: FirebaseFirestore.instance
-                                        .collection('carts')
-                                        .doc(currentUserUid),
-                                    queryBuilder: (q) => q.where(
-                                      'sucursalRef',
-                                      isEqualTo:
-                                          _selectedSucursal!.reference,
-                                    ),
-                                  );
-
-                                  await showModalBottomSheet(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    backgroundColor: Colors.transparent,
-                                    barrierColor: Colors.black
-                                        .withOpacity(0.15),
-                                    builder: (_) => InfoFarmaciaWidget(
-                                      sucursal: _selectedSucursal!,
-                                      items: items,
-                                      // 👇 Estos callbacks solo actualizan la ruta (el historial lo maneja InfoFarmaciaWidget)
-                                      onWalkPressed:
-                                          (SucursalesRecord sucursal) async {
-                                        setState(() {
-                                          _selectedSucursal = sucursal;
-                                          _travelMode = 'walking';
-                                        });
-                                      },
-                                      onMotoPressed:
-                                          (SucursalesRecord sucursal) async {
-                                        setState(() {
-                                          _selectedSucursal = sucursal;
-                                          _travelMode = 'driving';
-                                        });
-                                      },
-                                      onAutoPressed:
-                                          (SucursalesRecord sucursal) async {
-                                        setState(() {
-                                          _selectedSucursal = sucursal;
-                                          _travelMode = 'driving';
-                                        });
-                                      },
-                                    ),
-                                  );
+                                  await _abrirInfoParaSucursal(
+                                      _selectedSucursal!);
                                 }
                               : null,
                         ),

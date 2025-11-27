@@ -66,17 +66,35 @@ class _CarritoWidgetState extends State<CarritoWidget> {
   // ====== Agrupar por farmacia ======
   Map<String, _FarmGroup> _groupByPharmacy(List<ItemsRecord> items) {
     final Map<String, _FarmGroup> groups = {};
+
     for (final it in items) {
       final slug =
           (it.pharmacySlug).isNotEmpty ? it.pharmacySlug : 'desconocida';
-      final label =
+      final labelIt =
           (it.pharmacyLabel).isNotEmpty ? it.pharmacyLabel : 'Farmacia';
-      final logo = it.pharmacyLogo;
+      final logoIt = (it.pharmacyLogo).isNotEmpty ? it.pharmacyLogo : '';
 
-      groups.putIfAbsent(
-        slug,
-        () => _FarmGroup(slug: slug, label: label, logo: logo, items: []),
-      );
+      if (!groups.containsKey(slug)) {
+        // Primera vez que vemos esta farmacia → creamos el grupo
+        groups[slug] = _FarmGroup(
+          slug: slug,
+          label: labelIt,
+          logo: logoIt,
+          items: [],
+        );
+      } else {
+        // Ya existe el grupo → podemos actualizar label/logo si cambiaron
+        final g = groups[slug]!;
+        // Si el label cambió (por ejemplo, IA movió de Hipermaxi a Chavez)
+        if (labelIt != 'Farmacia' && g.label != labelIt) {
+          g.label = labelIt;
+        }
+        // Si antes no teníamos logo y ahora sí, o simplemente es distinto
+        if (logoIt.isNotEmpty && g.logo != logoIt) {
+          g.logo = logoIt;
+        }
+      }
+
       groups[slug]!.items.add(it);
     }
 
@@ -150,17 +168,24 @@ class _CarritoWidgetState extends State<CarritoWidget> {
   Future<void> _onAIAdvicePressed() async {
     setState(() {
       _aiLoading = true;
-      _aiMessage = null;
     });
 
-    final text = await AICartService().getCartAdviceFromAI();
-
+    final result = await AICartService().getCartAdviceFromAI();
     if (!mounted) return;
 
     setState(() {
       _aiLoading = false;
-      _aiMessage = text;
     });
+
+    final message = (result['message'] as String?) ?? '';
+    final recs =
+        (result['recommendations'] as List? ?? []).cast<Map<String, dynamic>>();
+
+    // Nos quedamos solo con recomendaciones con ahorro > 0
+    final ahorroRecs = recs.where((r) {
+      final savings = (r['savings'] as num?) ?? 0;
+      return savings > 0;
+    }).toList();
 
     await showModalBottomSheet(
       context: context,
@@ -187,36 +212,109 @@ class _CarritoWidgetState extends State<CarritoWidget> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Recomendación de IA',
-                    style: FlutterFlowTheme.of(context)
-                        .titleMedium
-                        .override(fontWeight: FontWeight.bold),
+                    'Recomendaciones de IA',
+                    style: FlutterFlowTheme.of(context).titleMedium.override(
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              Text(
-                _aiMessage ?? 'No se recibió ningún mensaje.',
-                style: FlutterFlowTheme.of(context).bodyMedium,
-              ),
-              const SizedBox(height: 16),
+
+              if (ahorroRecs.isEmpty) ...[
+                // Si no hay ahorro, mostramos el mensaje corto actual
+                Text(
+                  message,
+                  style: FlutterFlowTheme.of(context).bodyMedium,
+                ),
+              ] else ...[
+                // Lista compacta de recomendaciones
+                ...ahorroRecs.map((r) {
+                  final nombre = r['itemName'] as String? ?? '';
+                  final currentPharm = r['currentPharmacy'] as String? ?? '';
+                  final currentPrice =
+                      (r['currentUnitPrice'] as num?)?.toDouble() ?? 0;
+                  final bestPharm = r['bestPharmacyName'] as String? ?? '';
+                  final bestPrice =
+                      (r['bestUnitPrice'] as num?)?.toDouble() ?? 0;
+                  final savings =
+                      (r['savings'] as num?)?.toDouble() ?? 0;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          nombre,
+                          style: FlutterFlowTheme.of(context)
+                              .bodyMedium
+                              .override(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$currentPharm: Bs. ${currentPrice.toStringAsFixed(2)}',
+                          style: FlutterFlowTheme.of(context).labelMedium,
+                        ),
+                        Text(
+                          '$bestPharm: Bs. ${bestPrice.toStringAsFixed(2)}',
+                          style: FlutterFlowTheme.of(context).labelMedium,
+                        ),
+                        Text(
+                          'Ahorro: Bs. ${savings.toStringAsFixed(2)}',
+                          style: FlutterFlowTheme.of(context)
+                              .labelMedium
+                              .override(
+                                color: Colors.green, // ahorro en verde
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                const SizedBox(height: 12),
+
+                // Botón para aplicar cambios en el carrito
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FFButtonWidget(
+                    onPressed: () async {
+                      await AICartService()
+                          .applyRecommendationsToCart(ahorroRecs);
+
+                      if (!mounted) return;
+                      Navigator.pop(context);
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Se aplicaron las recomendaciones a tu carrito.'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    text: 'Aplicar recomendaciones',
+                    options: FFButtonOptions(
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 0),
+                      color: FlutterFlowTheme.of(context).primary,
+                      textStyle: FlutterFlowTheme.of(context)
+                          .titleSmall
+                          .override(color: Colors.white),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
-                child: FFButtonWidget(
+                child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  text: 'Cerrar',
-                  options: FFButtonOptions(
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 0,
-                    ),
-                    color: FlutterFlowTheme.of(context).primary,
-                    textStyle: FlutterFlowTheme.of(context)
-                        .titleSmall
-                        .override(color: Colors.white),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  child: const Text('Cerrar'),
                 ),
               ),
             ],
@@ -767,8 +865,8 @@ class _FarmGroup {
   });
 
   final String slug;
-  final String label;
-  final String logo;
+  String label;
+  String logo;
   final List<ItemsRecord> items;
   double? total;
 }

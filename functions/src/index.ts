@@ -243,7 +243,8 @@ export const aiCartAdvice = onRequest(
           totalCurrent,
           totalBest,
           savings,
-        });
+          productPath,
+        } as any);
       }
 
       if (recommendations.length === 0) {

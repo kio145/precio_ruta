@@ -16,6 +16,7 @@ export 'ruta_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
 import '/components/info_farmacia_widget.dart';
+import '/backend/schema/items_record.dart';
 
 class RutaWidget extends StatefulWidget {
   const RutaWidget({super.key});
@@ -107,11 +108,64 @@ class _RutaWidgetState extends State<RutaWidget> {
     return earthRadius * c;
   }
 
+  /// Guarda en Firestore el historial de la visita a una sucursal (desde RutaWidget)
+  Future<void> _registrarVisita(
+    SucursalesRecord sucursal,
+    List<ItemsRecord> items,
+    String travelMode, // 'walking' | 'moto' | 'auto'
+  ) async {
+    try {
+      final now = DateTime.now();
+
+      // Total de la compra en esta sucursal
+      final total = items.fold<double>(0.0, (acc, it) {
+        final qty = it.qty ?? 0;
+        final price = it.unitPrice ?? 0.0;
+        return acc + qty * price;
+      });
+
+      // Detalle de productos
+      final products = items.map((it) {
+        final qty = it.qty ?? 0;
+        final price = it.unitPrice ?? 0.0;
+        return {
+          'name': it.name ?? '',
+          'qty': qty,
+          'unitPrice': price,
+          'subtotal': qty * price,
+          'productRef': it.productRef,
+        };
+      }).toList();
+
+      final userRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserUid);
+
+      await userRef.collection('rutas_history').add({
+        'sucursalRef': sucursal.reference,
+        'createdAt': FieldValue.serverTimestamp(),
+        'year': now.year,
+        'month': now.month,
+        'travelMode': travelMode, // 'walking' | 'moto' | 'auto'
+        'total': total,
+        'products': products,
+      });
+    } catch (e) {
+      debugPrint('Error registrando visita desde RutaWidget: $e');
+    }
+  }
+
   // Modal con la lista de sucursales cercanas
   Widget _buildSucursalesSheet(
     List<SucursalesRecord> sucursales,
     LatLng origin,
-    void Function(SucursalesRecord suc, String mode) onModeSelected,
+    List<ItemsRecord> cartItems,
+    Future<void> Function(
+      SucursalesRecord suc,
+      String routeMode,
+      String historyMode,
+    )
+        onModeSelected,
   ) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -206,8 +260,12 @@ class _RutaWidgetState extends State<RutaWidget> {
                                 // A pie
                                 Expanded(
                                   child: FFButtonWidget(
-                                    onPressed: () {
-                                      onModeSelected(s, 'walking');
+                                    onPressed: () async {
+                                      await onModeSelected(
+                                        s,
+                                        'walking', // modo mapa
+                                        'walking', // modo historial
+                                      );
                                       Navigator.of(context).pop();
                                     },
                                     text: 'A pie',
@@ -244,8 +302,12 @@ class _RutaWidgetState extends State<RutaWidget> {
                                 // Moto
                                 Expanded(
                                   child: FFButtonWidget(
-                                    onPressed: () {
-                                      onModeSelected(s, 'driving'); // moto
+                                    onPressed: () async {
+                                      await onModeSelected(
+                                        s,
+                                        'driving', // modo mapa
+                                        'moto', // modo historial
+                                      );
                                       Navigator.of(context).pop();
                                     },
                                     text: 'Moto',
@@ -282,8 +344,12 @@ class _RutaWidgetState extends State<RutaWidget> {
                                 // Auto
                                 Expanded(
                                   child: FFButtonWidget(
-                                    onPressed: () {
-                                      onModeSelected(s, 'driving'); // auto
+                                    onPressed: () async {
+                                      await onModeSelected(
+                                        s,
+                                        'driving', // modo mapa
+                                        'auto', // modo historial
+                                      );
                                       Navigator.of(context).pop();
                                     },
                                     text: 'Auto',
@@ -455,6 +521,12 @@ class _RutaWidgetState extends State<RutaWidget> {
                 return da.compareTo(db);
               });
 
+            // Si no hay sucursal seleccionada aún, usar la más cercana
+            if (_selectedSucursal == null && sucursalesCercanas.isNotEmpty) {
+              _selectedSucursal = sucursalesCercanas.first;
+              _travelMode = 'driving'; // por defecto auto/moto
+            }
+
             final hasDestination = _selectedSucursal != null;
             final LatLng endCoord =
                 hasDestination ? _selectedSucursal!.ubicacion! : currentLoc;
@@ -513,6 +585,28 @@ class _RutaWidgetState extends State<RutaWidget> {
                                     builder: (_) => InfoFarmaciaWidget(
                                       sucursal: _selectedSucursal!,
                                       items: items,
+                                      // 👇 Estos callbacks solo actualizan la ruta (el historial lo maneja InfoFarmaciaWidget)
+                                      onWalkPressed:
+                                          (SucursalesRecord sucursal) async {
+                                        setState(() {
+                                          _selectedSucursal = sucursal;
+                                          _travelMode = 'walking';
+                                        });
+                                      },
+                                      onMotoPressed:
+                                          (SucursalesRecord sucursal) async {
+                                        setState(() {
+                                          _selectedSucursal = sucursal;
+                                          _travelMode = 'driving';
+                                        });
+                                      },
+                                      onAutoPressed:
+                                          (SucursalesRecord sucursal) async {
+                                        setState(() {
+                                          _selectedSucursal = sucursal;
+                                          _travelMode = 'driving';
+                                        });
+                                      },
                                     ),
                                   );
                                 }
@@ -538,11 +632,25 @@ class _RutaWidgetState extends State<RutaWidget> {
                                   return _buildSucursalesSheet(
                                     sucursalesCercanas,
                                     currentLoc,
-                                    (sucursal, mode) {
+                                    cartItems,
+                                    (sucursal, routeMode, historyMode) async {
+                                      // Items de esa sucursal
+                                      final itemsSucursal = cartItems
+                                          .where((it) =>
+                                              it.sucursalRef ==
+                                              sucursal.reference)
+                                          .toList();
+
                                       setState(() {
                                         _selectedSucursal = sucursal;
-                                        _travelMode = mode;
+                                        _travelMode = routeMode;
                                       });
+
+                                      await _registrarVisita(
+                                        sucursal,
+                                        itemsSucursal,
+                                        historyMode,
+                                      );
                                     },
                                   );
                                 },

@@ -26,7 +26,7 @@ class InfoFarmaciaWidget extends StatefulWidget {
   final SucursalesRecord sucursal;
   final List<ItemsRecord> items;
 
-  /// Se ejecutan al pulsar los botones de ruta
+  /// Se ejecutan al pulsar los botones de ruta (para actualizar el mapa)
   final Future<void> Function(SucursalesRecord sucursal)? onWalkPressed;
   final Future<void> Function(SucursalesRecord sucursal)? onMotoPressed;
   final Future<void> Function(SucursalesRecord sucursal)? onAutoPressed;
@@ -98,6 +98,8 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
           .doc(currentUserUid);
 
       await userRef.collection('rutas_history').add({
+        'userRef': userRef,
+        'uid': currentUserUid,
         'sucursalRef': widget.sucursal.reference,
         'createdAt': FieldValue.serverTimestamp(),
         'year': now.year,
@@ -105,6 +107,7 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
         'travelMode': travelMode, // 'walking' | 'moto' | 'auto'
         'total': total,
         'products': products,
+        'source': 'info_farmacia', // para saber desde dónde se generó
       });
     } catch (e) {
       debugPrint('Error registrando visita: $e');
@@ -286,7 +289,9 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                     Expanded(
                       child: FFButtonWidget(
                         onPressed: () async {
+                          // 1) Guardar historial
                           await _registrarVisita('walking');
+                          // 2) Actualizar ruta en el mapa (callback desde RutaWidget)
                           if (widget.onWalkPressed != null) {
                             await widget.onWalkPressed!(suc);
                           }

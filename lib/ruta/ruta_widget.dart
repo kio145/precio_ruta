@@ -108,6 +108,24 @@ class _RutaWidgetState extends State<RutaWidget> {
     return earthRadius * c;
   }
 
+  /// Devuelve los ítems del carrito que pertenecen a la misma farmacia
+  /// que la sucursal indicada (se compara por farmaciaRef.path).
+  List<ItemsRecord> _itemsDeFarmaciaParaSucursal(
+    SucursalesRecord sucursal,
+    List<ItemsRecord> cartItems,
+    Map<String, String> sucursalToFarmaciaPath,
+  ) {
+    final sucFarmPath = sucursal.farmaciaRef?.path;
+    if (sucFarmPath == null) return <ItemsRecord>[];
+
+    return cartItems.where((it) {
+      final itemSucPath = it.sucursalRef?.path;
+      if (itemSucPath == null) return false;
+      final itemFarmPath = sucursalToFarmaciaPath[itemSucPath];
+      return itemFarmPath == sucFarmPath;
+    }).toList();
+  }
+
   /// Guarda en Firestore el historial de la visita a una sucursal (desde RutaWidget)
   Future<void> _registrarVisita(
     SucursalesRecord sucursal,
@@ -117,19 +135,19 @@ class _RutaWidgetState extends State<RutaWidget> {
     try {
       final now = DateTime.now();
 
-      // Total de la compra en esta sucursal
+      // Total de la compra en esta sucursal (usamos getters no nulos)
       final total = items.fold<double>(0.0, (acc, it) {
-        final qty = it.qty ?? 0;
-        final price = it.unitPrice ?? 0.0;
+        final qty = it.qty;
+        final price = it.unitPrice;
         return acc + qty * price;
       });
 
       // Detalle de productos
       final products = items.map((it) {
-        final qty = it.qty ?? 0;
-        final price = it.unitPrice ?? 0.0;
+        final qty = it.qty;
+        final price = it.unitPrice;
         return {
-          'name': it.name ?? '',
+          'name': it.name,
           'qty': qty,
           'unitPrice': price,
           'subtotal': qty * price,
@@ -137,9 +155,8 @@ class _RutaWidgetState extends State<RutaWidget> {
         };
       }).toList();
 
-      final userRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserUid);
+      final userRef =
+          FirebaseFirestore.instance.collection('users').doc(currentUserUid);
 
       await userRef.collection('rutas_history').add({
         'userRef': userRef,
@@ -163,6 +180,7 @@ class _RutaWidgetState extends State<RutaWidget> {
     List<SucursalesRecord> sucursales,
     LatLng origin,
     List<ItemsRecord> cartItems,
+    Map<String, String> sucursalToFarmaciaPath,
     Future<void> Function(
       SucursalesRecord suc,
       String routeMode,
@@ -401,16 +419,16 @@ class _RutaWidgetState extends State<RutaWidget> {
     );
   }
 
-  Future<void> _abrirInfoParaSucursal(SucursalesRecord sucursal) async {
-    // Traer solo los ítems de esa sucursal en el carrito
-    final items = await queryItemsRecordOnce(
-      parent: FirebaseFirestore.instance
-          .collection('carts')
-          .doc(currentUserUid),
-      queryBuilder: (q) => q.where(
-        'sucursalRef',
-        isEqualTo: sucursal.reference,
-      ),
+  Future<void> _abrirInfoParaSucursal(
+    SucursalesRecord sucursal,
+    List<ItemsRecord> cartItems,
+    Map<String, String> sucursalToFarmaciaPath,
+  ) async {
+    // Traer los ítems del carrito de la misma FARMACIA que esta sucursal
+    final items = _itemsDeFarmaciaParaSucursal(
+      sucursal,
+      cartItems,
+      sucursalToFarmaciaPath,
     );
 
     // Actualizar sucursal seleccionada (para la ruta)
@@ -498,7 +516,21 @@ class _RutaWidgetState extends State<RutaWidget> {
 
         final allSucursales = sucSnap.data!;
 
-        // Solo sucursales que aparezcan en el carrito (por sucursalRef)
+        // ===============================
+        // Mapear sucursal -> farmacia
+        // ===============================
+        final Map<String, String> sucursalToFarmaciaPath = {};
+        for (final s in allSucursales) {
+          final sucPath = s.reference.path;
+          final farmPath = s.farmaciaRef?.path;
+          if (farmPath != null) {
+            sucursalToFarmaciaPath[sucPath] = farmPath;
+          }
+        }
+
+        // ===============================
+        // FutureBuilder de items del carrito
+        // ===============================
         return FutureBuilder<List<ItemsRecord>>(
           future: queryItemsRecordOnce(
             parent: FirebaseFirestore.instance
@@ -526,13 +558,21 @@ class _RutaWidgetState extends State<RutaWidget> {
 
             final cartItems = cartSnap.data!;
 
-            final cartSucursalPaths = cartItems
-                .map((i) => i.sucursalRef?.path)
-                .whereType<String>()
-                .toSet();
+            // Farmacias presentes en el carrito, deducidas a partir de sucursalRef
+            final Set<String> cartFarmaciaPaths = {};
+            for (final item in cartItems) {
+              final sucPath = item.sucursalRef?.path;
+              if (sucPath == null) continue;
+              final farmPath = sucursalToFarmaciaPath[sucPath];
+              if (farmPath != null) {
+                cartFarmaciaPaths.add(farmPath);
+              }
+            }
 
+            // Todas las sucursales de esas farmacias
             final sucursalesDeCarrito = allSucursales.where((s) {
-              return cartSucursalPaths.contains(s.reference.path);
+              final farmPath = s.farmaciaRef?.path;
+              return farmPath != null && cartFarmaciaPaths.contains(farmPath);
             }).toList();
 
             if (sucursalesDeCarrito.isEmpty) {
@@ -576,7 +616,7 @@ class _RutaWidgetState extends State<RutaWidget> {
                 return da.compareTo(db);
               });
 
-            // === NUEVO: sucursal más cercana por farmacia para los marcadores ===
+            // sucursal más cercana por farmacia para los marcadores
             final Map<String, SucursalesRecord> mejoresPorFarmacia = {};
             final Map<String, double> mejorDistPorFarmacia = {};
 
@@ -645,21 +685,30 @@ class _RutaWidgetState extends State<RutaWidget> {
                           endCoordinate: endCoord,
                           travelMode: _travelMode,
 
-                          // 👇 NUEVOS PARÁMETROS
-                          showStartMarker: false, // no mostrar pin en tu ubicación
-                          branchMarkers: markerCoords, // pines rojos de sucursales
+                          // Marcadores
+                          showStartMarker:
+                              false, // no mostrar pin en tu ubicación
+                          branchMarkers:
+                              markerCoords, // pines rojos de sucursales
                           branchSucursales: markerSucursales,
 
                           // Cuando tocas un pin rojo
                           onBranchTap: (sucursal) async {
-                            await _abrirInfoParaSucursal(sucursal);
+                            await _abrirInfoParaSucursal(
+                              sucursal,
+                              cartItems,
+                              sucursalToFarmaciaPath,
+                            );
                           },
 
-                          // 🔹 Cuando tocas el marcador de destino (la seleccionada)
+                          // Cuando tocas el marcador de destino (la seleccionada)
                           onDestinationTap: hasDestination
                               ? () async {
                                   await _abrirInfoParaSucursal(
-                                      _selectedSucursal!);
+                                    _selectedSucursal!,
+                                    cartItems,
+                                    sucursalToFarmaciaPath,
+                                  );
                                 }
                               : null,
                         ),
@@ -684,13 +733,15 @@ class _RutaWidgetState extends State<RutaWidget> {
                                     sucursalesCercanas,
                                     currentLoc,
                                     cartItems,
+                                    sucursalToFarmaciaPath,
                                     (sucursal, routeMode, historyMode) async {
-                                      // Items de esa sucursal
-                                      final itemsSucursal = cartItems
-                                          .where((it) =>
-                                              it.sucursalRef ==
-                                              sucursal.reference)
-                                          .toList();
+                                      // Ítems de la misma farmacia que la sucursal
+                                      final itemsSucursal =
+                                          _itemsDeFarmaciaParaSucursal(
+                                        sucursal,
+                                        cartItems,
+                                        sucursalToFarmaciaPath,
+                                      );
 
                                       setState(() {
                                         _selectedSucursal = sucursal;

@@ -1,13 +1,11 @@
-// Automatic FlutterFlow imports
 import '/backend/backend.dart';
 import '/backend/schema/structs/index.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import 'index.dart'; // Imports other custom widgets
-import '/flutter_flow/custom_functions.dart'; // Imports custom functions
+import 'index.dart'; 
+import '/flutter_flow/custom_functions.dart'; 
 import 'package:flutter/material.dart';
-// Begin custom widget code
-// DO NOT REMOVE OR MODIFY THE CODE ABOVE!
+
 
 import 'dart:math' show cos, sqrt, asin;
 import 'dart:convert';
@@ -29,7 +27,7 @@ class RouteViewStatic extends StatefulWidget {
     required this.webGoogleMapsApiKey,
     this.startAddress,
     this.destinationAddress,
-    this.travelMode = 'driving', // 'walking' | 'driving' | ...
+    this.travelMode = 'driving',
     this.onDestinationTap,
 
     /// Mostrar o no el marcador azul del origen
@@ -48,7 +46,7 @@ class RouteViewStatic extends StatefulWidget {
   final double? height;
   final double? width;
 
-  /// Coordenadas de FlutterFlow (LatLng de FF, NO de google_maps_flutter)
+  /// Coordenadas de FlutterFlow 
   final LatLng startCoordinate;
   final LatLng endCoordinate;
 
@@ -59,8 +57,8 @@ class RouteViewStatic extends StatefulWidget {
   final String? startAddress;
   final String? destinationAddress;
 
-  /// Modo de viaje para Directions/DistanceMatrix
-  /// valores válidos: 'driving', 'walking', 'bicycling', 'transit'
+  /// Modo de viaje para Directions
+  /// valores válidos
   final String travelMode;
 
   /// Se ejecuta cuando el usuario toca el marcador de destino
@@ -184,7 +182,7 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
 
     // === MARCADORES ===
 
-    // Origen (azul)
+    // Origen 
     if (widget.showStartMarker) {
       _markers.add(
         Marker(
@@ -197,7 +195,7 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       );
     }
 
-    // Sucursales (rojo, cada una con su SucursalesRecord)
+    // Sucursales 
     if (widget.branchMarkers != null) {
       for (int i = 0; i < widget.branchMarkers!.length; i++) {
         final b = widget.branchMarkers![i];
@@ -223,7 +221,7 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
       }
     }
 
-    // Destino (marcador normal, lo dejamos también en rojo por compatibilidad)
+    // Destino 
     final destId = 'dest_marker';
     _markers.add(
       Marker(
@@ -489,7 +487,7 @@ class _RouteViewStaticState extends State<RouteViewStatic> {
         markers: _markers,
         polylines: Set<Polyline>.of(_polylines.values),
         initialCameraPosition: _initialLocation,
-        myLocationEnabled: true, // puntito azul
+        myLocationEnabled: true, 
         myLocationButtonEnabled: false,
         mapType: MapType.normal,
         zoomGesturesEnabled: true,

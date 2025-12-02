@@ -196,24 +196,31 @@ export const aiCartAdvice = onRequest(
             .get();
 
           for (const sucDoc of sucSnap.docs) {
-            const data = sucDoc.data() as any;
-            const geo = data.geo as GeoPoint | undefined;
+          const data = sucDoc.data() as any;
 
-            if (!geo) continue;
+          // usa el nombre REAL del campo en Firestore
+          const geo =
+            (data.ubicacion as GeoPoint | undefined) ||
+            (data.geo as GeoPoint | undefined); // por si luego creas el alias
 
-            const d = haversineKm(
-              userLat as number,
-              userLng as number,
-              geo.latitude,
-              geo.longitude
-            );
-
-            if (bestDistanceKm === null || d < bestDistanceKm) {
-              bestDistanceKm = d;
-              bestBranchName =
-                data.nombre || data.name || `Sucursal ${sucDoc.id}`;
-            }
+          if (!geo) {
+            logger.warn(`Sucursal sin GeoPoint: ${sucDoc.id}`);
+            continue;
           }
+
+          const d = haversineKm(
+            userLat as number,
+            userLng as number,
+            geo.latitude,   // lat
+            geo.longitude,  // lng
+          );
+
+          if (bestDistanceKm === null || d < bestDistanceKm) {
+            bestDistanceKm = d;
+            bestBranchName =
+              data.nombre || data.name || `Sucursal ${sucDoc.id}`;
+          }
+        }
         }
 
         const totalCurrent = currentPrice * qty;

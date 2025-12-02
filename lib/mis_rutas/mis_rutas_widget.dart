@@ -16,8 +16,6 @@ import 'package:provider/provider.dart';
 import 'mis_rutas_model.dart';
 export 'mis_rutas_model.dart';
 
-/// ==== MODELOS INTERNOS PARA EL HISTORIAL ====
-
 // Producto comprado en una visita
 class _ProductoHist {
   final String name;
@@ -66,12 +64,12 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   LatLng? currentUserLocationValue;
 
-  int? _selectedMonth; // 1-12
-  int? _selectedYear; // ej. 2025
+  int? _selectedMonth;
+  int? _selectedYear; 
 
-  // Años y (año-mes) donde hay al menos una visita
+  // Años y (año-mes) 
   Set<int> _availableYears = {};
-  Set<String> _availableYearMonths = {}; // formato 'YYYY-MM'
+  Set<String> _availableYearMonths = {}; 
   bool _loadingPeriods = true;
 
   @override
@@ -88,10 +86,10 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
     _selectedMonth = now.month;
     _selectedYear = now.year;
 
-    _model.dropDownValue1 ??= now.month.toString(); // mes
-    _model.dropDownValue2 ??= now.year.toString(); // año
+    _model.dropDownValue1 ??= now.month.toString(); 
+    _model.dropDownValue2 ??= now.year.toString(); 
 
-    // Cargar los periodos disponibles en rutas_history
+    // Cargar los periodos disponibles
     _loadAvailablePeriods();
 
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
@@ -126,7 +124,7 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
         }
       }
 
-      // Siempre incluir el año actual aunque no tenga compras aún
+      // Siempre incluir el año actual aunque no se compras aún
       final currentYear = DateTime.now().year;
       years.add(currentYear);
 
@@ -143,14 +141,14 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
     }
   }
 
-  /// Carga las visitas guardadas de Firestore para el mes/año indicados
+  /// Carga visitas guardadas de Firestore para el mes/año 
   Future<List<_RutaHist>> _loadRutas(int year, int month) async {
     final ref = FirebaseFirestore.instance
         .collection('users')
         .doc(currentUserUid)
         .collection('rutas_history');
 
-    // 🔹 Sin orderBy para evitar índice compuesto; luego ordenamos en memoria
+    //  Sin orderBy para evitar índice compuesto
     final qs = await ref
         .where('year', isEqualTo: year)
         .where('month', isEqualTo: month)
@@ -183,7 +181,7 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
       final createdAtTs = data['createdAt'] as Timestamp?;
       final createdAt = createdAtTs?.toDate();
 
-      // Productos (puede no existir en documentos antiguos)
+      // Productos 
       final productos = <_ProductoHist>[];
       final rawProducts = data['products'] as List<dynamic>?;
 

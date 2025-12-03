@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
 
 import '/backend/schema/util/firestore_util.dart';
@@ -41,12 +42,34 @@ class SucursalesRecord extends FirestoreRecord {
   LatLng? get ubicacion => _ubicacion;
   bool hasUbicacion() => _ubicacion != null;
 
+  // ===== NUEVOS CAMPOS =====
+
+  // "horario" field (map con Domingo, Lunes, etc.).
+  Map<String, dynamic>? _horario;
+  Map<String, dynamic>? get horario => _horario;
+  bool hasHorario() => _horario != null;
+
+  // "imagen_url" field.
+  String? _imagenUrl;
+  String get imagenUrl => _imagenUrl ?? '';
+  bool hasImagenUrl() => _imagenUrl != null;
+
   void _initializeFields() {
     _createdAt = snapshotData['createdAt'] as DateTime?;
     _farmaciaRef = snapshotData['farmaciaRef'] as DocumentReference?;
     _fechaRelacion = snapshotData['fecha_relacion'] as DateTime?;
     _nombre = snapshotData['nombre'] as String?;
     _ubicacion = snapshotData['ubicacion'] as LatLng?;
+
+    // Campos nuevos
+    final rawHorario = snapshotData['horario'];
+    if (rawHorario is Map) {
+      _horario = rawHorario.cast<String, dynamic>();
+    } else {
+      _horario = null;
+    }
+
+    _imagenUrl = snapshotData['imagen_url'] as String?;
   }
 
   static CollectionReference get collection =>
@@ -89,6 +112,8 @@ Map<String, dynamic> createSucursalesRecordData({
   DateTime? fechaRelacion,
   String? nombre,
   LatLng? ubicacion,
+  Map<String, dynamic>? horario,
+  String? imagenUrl,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -97,6 +122,8 @@ Map<String, dynamic> createSucursalesRecordData({
       'fecha_relacion': fechaRelacion,
       'nombre': nombre,
       'ubicacion': ubicacion,
+      'horario': horario,
+      'imagen_url': imagenUrl,
     }.withoutNulls,
   );
 
@@ -112,7 +139,9 @@ class SucursalesRecordDocumentEquality implements Equality<SucursalesRecord> {
         e1?.farmaciaRef == e2?.farmaciaRef &&
         e1?.fechaRelacion == e2?.fechaRelacion &&
         e1?.nombre == e2?.nombre &&
-        e1?.ubicacion == e2?.ubicacion;
+        e1?.ubicacion == e2?.ubicacion &&
+        const MapEquality().equals(e1?.horario, e2?.horario) &&
+        e1?.imagenUrl == e2?.imagenUrl;
   }
 
   @override
@@ -121,7 +150,9 @@ class SucursalesRecordDocumentEquality implements Equality<SucursalesRecord> {
         e?.farmaciaRef,
         e?.fechaRelacion,
         e?.nombre,
-        e?.ubicacion
+        e?.ubicacion,
+        e?.horario,
+        e?.imagenUrl,
       ]);
 
   @override

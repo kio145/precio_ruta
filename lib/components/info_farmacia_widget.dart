@@ -57,7 +57,9 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
     super.dispose();
   }
 
-  /// Horario fijo: 07:00 - 22:30
+  /// --------- HORARIO / ESTADO ----------
+
+  // Si quieres seguir usando el horario fijo 07:00-22:30 para "Abierto/Cerrado"
   bool _isOpenNow() {
     final now = TimeOfDay.fromDateTime(DateTime.now());
     final minutesNow = now.hour * 60 + now.minute;
@@ -66,6 +68,45 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
     const closeMinutes = 22 * 60 + 30; // 22:30
 
     return minutesNow >= openMinutes && minutesNow <= closeMinutes;
+  }
+
+  /// Devuelve el nombre del día en español según DateTime.now()
+  String _nombreDiaHoy() {
+    final now = DateTime.now();
+    switch (now.weekday) {
+      case DateTime.monday:
+        return 'Lunes';
+      case DateTime.tuesday:
+        return 'Martes';
+      case DateTime.wednesday:
+        return 'Miercoles';
+      case DateTime.thursday:
+        return 'Jueves';
+      case DateTime.friday:
+        return 'Viernes';
+      case DateTime.saturday:
+        return 'Sabado';
+      case DateTime.sunday:
+      default:
+        return 'Domingo';
+    }
+  }
+
+  /// Toma el campo "horario" de la sucursal (map) y devuelve el horario de HOY
+  String _horarioDeHoy(Map<String, dynamic>? horario) {
+    if (horario == null || horario.isEmpty) {
+      return 'Horario no disponible';
+    }
+
+    final diaHoy = _nombreDiaHoy();
+    final value = horario[diaHoy];
+
+    if (value is String && value.trim().isNotEmpty) {
+      return '$diaHoy: $value';
+    }
+
+    // Si no hay horario específico para el día de hoy, muestra genérico
+    return 'Horario no disponible';
   }
 
   /// Guarda en Firestore el historial de la visita a esta sucursal
@@ -93,9 +134,8 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
         };
       }).toList();
 
-      final userRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserUid);
+      final userRef =
+          FirebaseFirestore.instance.collection('users').doc(currentUserUid);
 
       await userRef.collection('rutas_history').add({
         'userRef': userRef,
@@ -123,6 +163,16 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
     final nombreSucursal =
         suc.nombre.isNotEmpty ? suc.nombre : 'Sucursal sin nombre';
 
+    // ====== NUEVO: datos dinámicos desde Firestore ======
+    // horario: map con Domingo, Lunes, Martes, etc.
+    final Map<String, dynamic>? horarioMap =
+        suc.horario is Map<String, dynamic> ? (suc.horario as Map<String, dynamic>) : null;
+    final String horarioHoy = _horarioDeHoy(horarioMap);
+
+    // imagen_url: url de la sucursal
+    final String? imageUrl = suc.imagenUrl;
+
+    // Estado abierto/cerrado (puedes luego mejorarlo usando horarioMap si quieres)
     final isOpen = _isOpenNow();
     final statusText = isOpen ? 'Abierto' : 'Cerrado';
     final statusColor =
@@ -235,8 +285,9 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                                 ),
                           ),
                         ),
+                        // *** NUEVO: horario dinámico de hoy ***
                         Text(
-                          'Viernes - Jueves   07:00 - 22:30',
+                          horarioHoy,
                           style:
                               FlutterFlowTheme.of(context).bodyMedium.override(
                                     font: GoogleFonts.inter(
@@ -258,7 +309,7 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
               ),
             ),
 
-            // ===== IMAGEN =====
+            // ===== IMAGEN DINÁMICA =====
             Align(
               alignment: const AlignmentDirectional(-1.0, 0.0),
               child: Padding(
@@ -266,12 +317,19 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                     0.0, 8.0, 0.0, 0.0),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(0.0),
-                  child: Image.asset(
-                    'assets/images/logoubi.png',
-                    width: 328.0,
-                    height: 89.0,
-                    fit: BoxFit.cover,
-                  ),
+                  child: (imageUrl != null && imageUrl.isNotEmpty)
+                      ? Image.network(
+                          imageUrl,
+                          width: 328.0,
+                          height: 89.0,
+                          fit: BoxFit.cover,
+                        )
+                      : Image.asset(
+                          'assets/images/logoubi.png',
+                          width: 328.0,
+                          height: 89.0,
+                          fit: BoxFit.cover,
+                        ),
                 ),
               ),
             ),
@@ -422,16 +480,15 @@ class _InfoFarmaciaWidgetState extends State<InfoFarmaciaWidget> {
                 children: [
                   Text(
                     'Productos en esta sucursal: ${items.length}',
-                    style:
-                        FlutterFlowTheme.of(context).bodyMedium.override(
-                              font: GoogleFonts.inter(
-                                fontWeight: FontWeight.w500,
-                                fontStyle: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .fontStyle,
-                              ),
-                              letterSpacing: 0.0,
-                            ),
+                    style: FlutterFlowTheme.of(context).bodyMedium.override(
+                          font: GoogleFonts.inter(
+                            fontWeight: FontWeight.w500,
+                            fontStyle: FlutterFlowTheme.of(context)
+                                .bodyMedium
+                                .fontStyle,
+                          ),
+                          letterSpacing: 0.0,
+                        ),
                   ),
                   const SizedBox(height: 6),
                   SizedBox(

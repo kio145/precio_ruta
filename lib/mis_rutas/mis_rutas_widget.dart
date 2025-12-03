@@ -65,12 +65,15 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
   LatLng? currentUserLocationValue;
 
   int? _selectedMonth;
-  int? _selectedYear; 
+  int? _selectedYear;
 
-  // Años y (año-mes) 
+  // Años y (año-mes)
   Set<int> _availableYears = {};
-  Set<String> _availableYearMonths = {}; 
+  Set<String> _availableYearMonths = {};
   bool _loadingPeriods = true;
+
+  // sucursal seleccionada
+  String? _selectedSucursalId;
 
   @override
   void initState() {
@@ -81,15 +84,15 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
     getCurrentUserLocation(defaultLocation: LatLng(0.0, 0.0), cached: true)
         .then((loc) => safeSetState(() => currentUserLocationValue = loc));
 
-    // Mes y año actuales por defecto
+    // Mes y año actuales
     final now = DateTime.now();
     _selectedMonth = now.month;
     _selectedYear = now.year;
 
-    _model.dropDownValue1 ??= now.month.toString(); 
-    _model.dropDownValue2 ??= now.year.toString(); 
+    _model.dropDownValue1 ??= now.month.toString();
+    _model.dropDownValue2 ??= now.year.toString();
 
-    // Cargar los periodos disponibles
+    // Cargar periodos disponibles
     _loadAvailablePeriods();
 
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
@@ -101,7 +104,6 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
     super.dispose();
   }
 
-  /// Lee de Firestore todos los años y meses donde hay historial
   Future<void> _loadAvailablePeriods() async {
     try {
       final ref = FirebaseFirestore.instance
@@ -124,7 +126,7 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
         }
       }
 
-      // Siempre incluir el año actual aunque no se compras aún
+      // Siempre incluir el año actual
       final currentYear = DateTime.now().year;
       years.add(currentYear);
 
@@ -141,28 +143,24 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
     }
   }
 
-  /// Carga visitas guardadas de Firestore para el mes/año 
   Future<List<_RutaHist>> _loadRutas(int year, int month) async {
     final ref = FirebaseFirestore.instance
         .collection('users')
         .doc(currentUserUid)
         .collection('rutas_history');
 
-    //  Sin orderBy para evitar índice compuesto
     final qs = await ref
         .where('year', isEqualTo: year)
         .where('month', isEqualTo: month)
         .get();
 
-    // Ordenar por createdAt DESC en Dart
+    // Orden por fecha desc
     final docs = [...qs.docs];
     docs.sort((a, b) {
-      final da = (a.data()['createdAt'] as Timestamp?)
-              ?.toDate() ??
-          DateTime.fromMillisecondsSinceEpoch(0);
-      final db = (b.data()['createdAt'] as Timestamp?)
-              ?.toDate() ??
-          DateTime.fromMillisecondsSinceEpoch(0);
+      final da =
+          (a.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final db =
+          (b.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
       return db.compareTo(da);
     });
 
@@ -175,13 +173,11 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
       final suc = await SucursalesRecord.getDocumentOnce(sucRef);
       if (suc.ubicacion == null) continue;
 
-      final total = (data['total'] is num)
-          ? (data['total'] as num).toDouble()
-          : 0.0;
+      final total =
+          (data['total'] is num) ? (data['total'] as num).toDouble() : 0.0;
       final createdAtTs = data['createdAt'] as Timestamp?;
       final createdAt = createdAtTs?.toDate();
 
-      // Productos 
       final productos = <_ProductoHist>[];
       final rawProducts = data['products'] as List<dynamic>?;
 
@@ -237,7 +233,7 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
       );
     }
 
-    // Valores para los combobox
+    // Combos mes / año
     final monthValues =
         List<String>.generate(12, (i) => (i + 1).toString()); // '1'..'12'
     const monthLabels = [
@@ -255,7 +251,6 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
       'DICIEMBRE',
     ];
 
-    // Años permitidos: año actual + años donde hay historial
     final yearsList = _availableYears.isEmpty
         ? [DateTime.now().year]
         : _availableYears.toList()..sort();
@@ -368,8 +363,8 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
                           ),
                           options: monthValues,
                           optionLabels: monthLabels,
-                          onChanged: (val) => safeSetState(
-                              () => _model.dropDownValue1 = val),
+                          onChanged: (val) =>
+                              safeSetState(() => _model.dropDownValue1 = val),
                           width: double.infinity,
                           height: 46.0,
                           textStyle:
@@ -420,8 +415,8 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
                           ),
                           options: yearValues,
                           optionLabels: yearLabels,
-                          onChanged: (val) => safeSetState(
-                              () => _model.dropDownValue2 = val),
+                          onChanged: (val) =>
+                              safeSetState(() => _model.dropDownValue2 = val),
                           width: double.infinity,
                           height: 46.0,
                           textStyle:
@@ -484,7 +479,6 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
 
                     final key = '$y-${m.toString().padLeft(2, '0')}';
 
-                    // Si no hay compras en ese periodo, no cambiamos el filtro
                     if (!_availableYearMonths.contains(key)) {
                       final idx = m - 1;
                       final monthName =
@@ -504,6 +498,7 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
                     setState(() {
                       _selectedMonth = m;
                       _selectedYear = y;
+                      _selectedSucursalId = null;
                     });
                   },
                   text: 'Filtrar',
@@ -527,7 +522,7 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
                 ),
               ),
 
-              /// MAPA + RESUMEN + LISTA
+              /// MAPA + RESUMEN + PANEL
               Expanded(
                 child: Padding(
                   padding: const EdgeInsetsDirectional.fromSTEB(
@@ -552,20 +547,28 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
                       }
 
                       final rutas = snapshot.data!;
-                      final visitasMes = rutas.length;
-                      final totalMes = rutas.fold<double>(
-                          0.0, (acc, r) => acc + r.total);
 
-                      // Marcadores: usuario + sucursales visitadas
+                      // Agrupar por sucursal
+                      final Map<String, List<_RutaHist>> rutasPorSucursal = {};
+                      for (final r in rutas) {
+                        final sucId = r.sucursal.reference.id;
+                        rutasPorSucursal.putIfAbsent(sucId, () => []).add(r);
+                      }
+
+                      final visitasMes = rutas.length;
+                      final totalMes =
+                          rutas.fold<double>(0.0, (acc, r) => acc + r.total);
+
+                      // Marcadores: usuario + uno por sucursal
                       final markers = <FlutterFlowMarker>[
                         FlutterFlowMarker(
                           'user',
                           currentUserLocationValue!,
                         ),
-                        ...rutas.map(
-                          (r) => FlutterFlowMarker(
-                            r.id,
-                            r.sucursal.ubicacion!,
+                        ...rutasPorSucursal.entries.map(
+                          (entry) => FlutterFlowMarker(
+                            entry.key,
+                            entry.value.first.sucursal.ubicacion!,
                           ),
                         ),
                       ];
@@ -573,6 +576,17 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
                       final initialLocation = rutas.isNotEmpty
                           ? rutas.first.sucursal.ubicacion!
                           : (currentUserLocationValue!);
+
+                      // datos sucursal seleccionada
+                      final selectedRutas = (_selectedSucursalId != null)
+                          ? (rutasPorSucursal[_selectedSucursalId] ?? [])
+                          : <_RutaHist>[];
+                      final selectedSucursal = selectedRutas.isNotEmpty
+                          ? selectedRutas.first.sucursal
+                          : null;
+                      final visitasSucursal = selectedRutas.length;
+                      final totalSucursal = selectedRutas.fold<double>(
+                          0.0, (acc, r) => acc + r.total);
 
                       return Column(
                         children: [
@@ -603,7 +617,7 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
                             ),
                           ),
 
-                          // RESUMEN
+                          // RESUMEN DEL MES
                           Padding(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 16.0, vertical: 8.0),
@@ -634,12 +648,65 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
                             ),
                           ),
 
-                          // LISTA DE VISITAS
+                          // FILA DE SUCURSALES (chips)
+                          if (rutasPorSucursal.isNotEmpty)
+                            SizedBox(
+                              height: 60,
+                              child: ListView(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16.0),
+                                children: rutasPorSucursal.entries.map((entry) {
+                                  final sucId = entry.key;
+                                  final suc = entry.value.first.sucursal;
+                                  final visitas = entry.value.length;
+                                  final isSelected =
+                                      sucId == _selectedSucursalId;
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: ChoiceChip(
+                                      label: Text(
+                                        '${suc.nombre.isNotEmpty ? suc.nombre : "Sucursal"}\n$visitas visita(s)',
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      selected: isSelected,
+                                      selectedColor:
+                                          const Color(0xFF1DB954),
+                                      labelStyle: FlutterFlowTheme.of(context)
+                                          .bodySmall
+                                          .override(
+                                            font: GoogleFonts.inter(
+                                              color: isSelected
+                                                  ? Colors.white
+                                                  : const Color(0xFF222222),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                      onSelected: (_) {
+                                        setState(() {
+                                          _selectedSucursalId = sucId;
+                                          _model.googleMapsCenter =
+                                              suc.ubicacion;
+                                        });
+                                      },
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+
+                          const SizedBox(height: 8),
+
+                          // PANEL DETALLE SUCURSAL
                           Expanded(
-                            child: rutas.isEmpty
+                            child: selectedSucursal == null
                                 ? Center(
                                     child: Text(
-                                      'No hay visitas registradas para este periodo.',
+                                      rutasPorSucursal.isEmpty
+                                          ? 'No hay visitas registradas para este periodo.'
+                                          : 'Selecciona una sucursal en la fila superior para ver el detalle.',
+                                      textAlign: TextAlign.center,
                                       style: FlutterFlowTheme.of(context)
                                           .bodyMedium
                                           .override(
@@ -647,26 +714,12 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
                                           ),
                                     ),
                                   )
-                                : ListView.builder(
-                                    itemCount: rutas.length,
-                                    itemBuilder: (context, index) {
-                                      final r = rutas[index];
-                                      final nombreSucursal =
-                                          r.sucursal.nombre.isNotEmpty
-                                              ? r.sucursal.nombre
-                                              : 'Sucursal sin nombre';
-                                      final fechaStr = r.createdAt != null
-                                          ? dateTimeFormat(
-                                              'dd/MM/yyyy HH:mm',
-                                              r.createdAt,
-                                            )
-                                          : '';
-
-                                      return Card(
-                                        color: const Color(
-                                            0xFFF5F5F5), // gris claro
-                                        margin: const EdgeInsets.symmetric(
-                                            horizontal: 16.0, vertical: 6.0),
+                                : ListView(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16.0, vertical: 6.0),
+                                    children: [
+                                      Card(
+                                        color: const Color(0xFFF5F5F5),
                                         shape: RoundedRectangleBorder(
                                           borderRadius:
                                               BorderRadius.circular(10.0),
@@ -678,7 +731,10 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                nombreSucursal,
+                                                selectedSucursal.nombre
+                                                        .isNotEmpty
+                                                    ? selectedSucursal.nombre
+                                                    : 'Sucursal sin nombre',
                                                 style: FlutterFlowTheme.of(
                                                         context)
                                                     .titleSmall
@@ -689,99 +745,131 @@ class _MisRutasWidgetState extends State<MisRutasWidget> {
                                                       ),
                                                     ),
                                               ),
-                                              if (fechaStr.isNotEmpty)
-                                                Padding(
-                                                  padding: const EdgeInsets
-                                                      .only(top: 2.0),
-                                                  child: Text(
-                                                    fechaStr,
-                                                    style: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodySmall
-                                                        .override(
-                                                          font: GoogleFonts
-                                                              .inter(
-                                                            color: const Color(
-                                                                0xFF666666),
-                                                          ),
-                                                        ),
-                                                  ),
-                                                ),
-                                              const SizedBox(height: 6),
-                                              Text(
-                                                'Total: Bs. ${r.total.toStringAsFixed(2)}',
-                                                style:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font: GoogleFonts
-                                                              .inter(
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                        ),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              Text(
-                                                'Productos:',
-                                                style:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font: GoogleFonts
-                                                              .inter(
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                        ),
-                                              ),
                                               const SizedBox(height: 4),
-                                              if (r.productos.isEmpty)
-                                                Text(
-                                                  '- (sin detalle de productos)',
-                                                  style:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodySmall
-                                                          .override(
-                                                            font:
-                                                                GoogleFonts
-                                                                    .inter(
-                                                              color: const Color(
-                                                                  0xFF777777),
-                                                            ),
-                                                          ),
-                                                )
-                                              else
-                                                Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: r.productos
-                                                      .map(
-                                                        (p) => Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                      .only(
-                                                                  bottom: 2.0),
-                                                          child: Text(
-                                                            '• ${p.name} (x${p.qty}) - Bs. ${p.subtotal.toStringAsFixed(2)}',
-                                                            style: FlutterFlowTheme
-                                                                    .of(context)
+                                              Text(
+                                                'Visitas en esta sucursal: $visitasSucursal',
+                                                style: FlutterFlowTheme.of(
+                                                        context)
+                                                    .bodyMedium
+                                                    .override(
+                                                      font: GoogleFonts.inter(
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                              ),
+                                              Text(
+                                                'Total gastado aquí: Bs. ${totalSucursal.toStringAsFixed(2)}',
+                                                style: FlutterFlowTheme.of(
+                                                        context)
+                                                    .bodyMedium
+                                                    .override(
+                                                      font: GoogleFonts.inter(
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Text(
+                                                'Detalle de visitas:',
+                                                style: FlutterFlowTheme.of(
+                                                        context)
+                                                    .bodyMedium
+                                                    .override(
+                                                      font: GoogleFonts.inter(
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              ...selectedRutas.map((r) {
+                                                final fechaStr =
+                                                    r.createdAt != null
+                                                        ? dateTimeFormat(
+                                                            'dd/MM/yyyy HH:mm',
+                                                            r.createdAt,
+                                                          )
+                                                        : '';
+                                                return Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          bottom: 8.0),
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Text(
+                                                        fechaStr,
+                                                        style:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
                                                                 .bodySmall
                                                                 .override(
                                                                   font: GoogleFonts
-                                                                      .inter(),
+                                                                      .inter(
+                                                                    color: const Color(
+                                                                        0xFF666666),
+                                                                  ),
                                                                 ),
-                                                          ),
+                                                      ),
+                                                      Text(
+                                                        'Total: Bs. ${r.total.toStringAsFixed(2)}',
+                                                        style:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .bodyMedium
+                                                                .override(
+                                                                  font: GoogleFonts
+                                                                      .inter(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                                ),
+                                                      ),
+                                                      const SizedBox(
+                                                          height: 2),
+                                                      Text(
+                                                        'Productos:',
+                                                        style:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .bodyMedium
+                                                                .override(
+                                                                  font: GoogleFonts
+                                                                      .inter(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                                ),
+                                                      ),
+                                                      ...r.productos.map(
+                                                        (p) => Text(
+                                                          '• ${p.name} (x${p.qty}) - Bs. ${p.subtotal.toStringAsFixed(2)}',
+                                                          style:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodySmall
+                                                                  .override(
+                                                                    font: GoogleFonts
+                                                                        .inter(),
+                                                                  ),
                                                         ),
-                                                      )
-                                                      .toList(),
-                                                ),
+                                                      ),
+                                                      const Divider(),
+                                                    ],
+                                                  ),
+                                                );
+                                              }).toList(),
                                             ],
                                           ),
                                         ),
-                                      );
-                                    },
+                                      ),
+                                    ],
                                   ),
                           ),
                         ],
